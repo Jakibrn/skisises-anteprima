@@ -177,6 +177,17 @@ function registerCards(list) { for (const p of list) CARDS[p.handle] = { t: p.ti
 const productUrl = h => `${BASE}products/${encodeURIComponent(h)}.html`;
 const yieldToMain = () => (window.scheduler && scheduler.yield) ? scheduler.yield() : new Promise(r => setTimeout(r, 0));
 
+// delivery window in Italy, as the shipping page states: 1-3 working days from the next working day
+function deliveryWindow(fmt = { weekday: 'long', day: 'numeric', month: 'long' }) {
+  const add = (date, n) => { const x = new Date(date); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) n--; } return x; };
+  const now = new Date(), f = new Intl.DateTimeFormat('it-IT', fmt);
+  return `tra ${f.format(add(now, 1))} e ${f.format(add(now, 3))}`;
+}
+
+// tracking consent from the cookie banner (97-floating.js): the for-you sources use the visitor's searches
+// and viewed products only with it, as the live endpoint does (a/m consent flags)
+function trackingOK() { const c = store.get('sks-consent', null); return c === 'all' || !!(c && typeof c === 'object' && (c.analytics || c.marketing || c.preferences)); }
+
 /* ---------- dialogs: native <dialog> gives focus trap, Esc and an inert page; we return focus ---------- */
 const openers = new WeakMap();
 function openDialog(id, opener) {
@@ -296,6 +307,48 @@ $('#drawer-menu')?.addEventListener('dialog:close', () => $$('.drawer-nav__panel
   document.addEventListener('click', e => { if (openItem && !openItem.contains(e.target)) close(openItem); });
 })();
 
+// the live menu icons load with their menu: on the first hover or focus of the top item, before it opens
+$$('.header__item[data-mega]').forEach(item => {
+  const warm = () => $$('img[loading="lazy"]', item).forEach(i => { i.loading = 'eager'; });
+  item.addEventListener('pointerenter', warm, { once: true });
+  item.addEventListener('focusin', warm, { once: true });
+});
+
+/* ---------- Shopify's country and language selectors (header, mobile menu, footer) ----------
+   In the theme these are Prestige's localization forms (POST /localization); in the preview a pick says
+   what the site would do. */
+(() => {
+  const close = except => $$('.locale__btn[aria-expanded="true"]').forEach(b => {
+    if (b === except) return;
+    b.setAttribute('aria-expanded', 'false');
+    document.getElementById(b.getAttribute('aria-controls')).hidden = true;
+  });
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.locale__btn');
+    if (btn) {
+      const pop = document.getElementById(btn.getAttribute('aria-controls'));
+      const open = btn.getAttribute('aria-expanded') !== 'true';
+      close(btn);
+      btn.setAttribute('aria-expanded', String(open));
+      pop.hidden = !open;
+      if (open) pop.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    const pick = e.target.closest('[data-locale-pick]');
+    if (pick) {
+      const lang = !!pick.closest('.locale__pop--lang');
+      close();
+      if (pick.getAttribute('aria-pressed') !== 'true') toast(lang ? `Anteprima: sul sito si apre la versione in ${pick.dataset.localePick}.` : `Anteprima: sul sito il negozio passa a ${pick.dataset.localePick}.`);
+      return;
+    }
+    if (!e.target.closest('.locale__pop')) close();
+  });
+  document.addEventListener('keydown', e => {
+    const open = $('.locale__btn[aria-expanded="true"]');
+    if (e.key === 'Escape' && open) { close(); open.focus(); }
+  });
+})();
+
 /* ---------- cart (proto-cart: stands in for Shopify's /cart/add.js; same UI states as the theme) ---------- */
 const FREE_SHIPPING = 50;
 const MOCK_LATENCY = 350;
@@ -363,11 +416,7 @@ function renderCart(newKey) {
   });
   $$('[data-cart-empty]').forEach(e => { e.hidden = !!count; });
   $$('[data-cart-foot]').forEach(f => { f.hidden = !count; });
-  // hide suggestions already in the cart
-  $$('[data-add-product]').forEach(b => {
-    const d = JSON.parse(b.dataset.addProduct);
-    b.closest('.mini-card').hidden = lines.some(l => l.handle === d.handle);
-  });
+  $$('[data-cart-delivery]').forEach(d => { d.textContent = deliveryWindow({ weekday: 'short', day: 'numeric', month: 'short' }); });
 }
 
 document.addEventListener('click', e => {
@@ -509,6 +558,8 @@ const Recent = {
     const products = index.products.map(p => [p, score(SKS_FMT.normalize(`${p[2]} ${p[1]} ${p[3]}`))]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
     const brands = index.brands.filter(b => score(SKS_FMT.normalize(b[1])));
     const colls = index.collections.filter(c => score(SKS_FMT.normalize(c[1])));
+    // the session's last search feeds "Scelti per te" (with tracking consent, as live)
+    if (q.length >= 3 && products.length && trackingOK()) { try { sessionStorage.setItem('sks-last-q', raw.trim()); } catch { /* private mode */ } }
     return { q, products, brands, colls };
   }
   function renderIdle() {
@@ -550,21 +601,27 @@ const Recent = {
   window.SKS_SEARCH_API = { loadIndex, search };
 })();
 
-/* ---------- rails: progress line + arrows over native scroll-snap ---------- */
-$$('[data-rail]').forEach(rail => {
-  const track = $('.rail__track', rail), bar = $('.rail__progress span', rail);
+/* ---------- rails: the live sliders' behaviour ("Prodotti simili", snippets/similar-products.liquid) over
+   native scroll-snap: a page at a time, arrows over the photos disabled at the ends, swipe on touch, two
+   cards per view on phones. A rail filled later (Scelti per te) sends "rail:update". ---------- */
+function initRail(rail) {
+  const track = $('.rail__track', rail), prev = $('[data-rail-prev]', rail), next = $('[data-rail-next]', rail), bar = $('.rail__progress span', rail);
   const update = () => {
     const max = track.scrollWidth - track.clientWidth;
-    const vis = track.clientWidth / track.scrollWidth;
-    bar && bar.style.setProperty('--progress', Math.min(1, vis + (max > 0 ? (track.scrollLeft / max) * (1 - vis) : 1)));
+    if (prev) prev.disabled = track.scrollLeft <= 2;
+    if (next) next.disabled = track.scrollLeft >= max - 2;
+    rail.classList.toggle('is-static', max <= 2);
+    if (bar) { const vis = track.clientWidth / track.scrollWidth; bar.style.setProperty('--progress', Math.min(1, vis + (max > 0 ? (track.scrollLeft / max) * (1 - vis) : 1))); }
   };
   track.addEventListener('scroll', () => requestAnimationFrame(update), { passive: true });
   addEventListener('resize', update, { passive: true });
+  rail.addEventListener('rail:update', update);
+  const page = dir => track.scrollBy({ left: dir * track.clientWidth, behavior: MOTION_OK() ? 'smooth' : 'auto' });
+  prev?.addEventListener('click', () => page(-1));
+  next?.addEventListener('click', () => page(1));
   update();
-  const step = dir => track.scrollBy({ left: dir * track.clientWidth * 0.8, behavior: MOTION_OK() ? 'smooth' : 'auto' });
-  $('[data-rail-prev]', rail)?.addEventListener('click', () => step(-1));
-  $('[data-rail-next]', rail)?.addEventListener('click', () => step(1));
-});
+}
+$$('[data-rail]').forEach(initRail);
 
 /* ---------- footer motion switch (remembered, applied before paint by the inline <head> script) ---------- */
 $$('[data-motion-toggle]').forEach(t => {
@@ -827,7 +884,7 @@ document.addEventListener('submit', e => {
   function syncChipCounts() {
     $$('[data-type-chip]').forEach(c => {
       const t = c.dataset.typeChip, n = data.filter(p => matches(p, 'type') && (!t || p.type === t)).length;
-      $('.chip__count', c).textContent = n;
+      $('.chip__count', c).textContent = c.classList.contains('type-tile') ? `${n} ${n === 1 ? 'prodotto' : 'prodotti'}` : n;
       c.parentElement.hidden = !n && !!t && state.type !== t;
     });
     $$('[data-gender-chip]').forEach(c => { $('.chip__count', c).textContent = data.filter(p => matches(p, 'gender') && forGender(p, c.dataset.genderChip)).length; });
@@ -983,11 +1040,7 @@ document.addEventListener('submit', e => {
   // delivery window: 1-3 working days from the next working day, in Italian
   const d = $('[data-delivery]');
   if (d) {
-    const add = (date, n) => { const x = new Date(date); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) n--; } return x; };
-    const now = new Date();
-    const a = add(now, 1), b = add(now, 3);
-    const f = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-    d.textContent = `tra ${f.format(a)} e ${f.format(b)}`;
+    d.textContent = deliveryWindow();
     const copy = $('[data-delivery-copy]'); if (copy) copy.textContent = d.textContent;
   }
 
@@ -1002,18 +1055,22 @@ document.addEventListener('submit', e => {
   shipLine();
   document.addEventListener('cart:rendered', shipLine);
 
-  // gallery: PhotoSwipe from the theme (vendor + photoswipe import map entry), mobile progress line
+  // gallery: PhotoSwipe from the theme (vendor + photoswipe import map entry), zoom 1.5 as live; on phones a
+  // swipe carousel with dots (the live mobile_controls: dots)
   const gallery = $('[data-gallery]');
   if (gallery) {
     try {
       const lb = new PhotoSwipeLightbox({ gallery, children: 'a', pswpModule: () => import('photoswipe'), bgOpacity: 1, showHideAnimationType: MOTION_OK() ? 'zoom' : 'none', wheelToZoom: true });
       lb.init();
     } catch { /* links still open the full image */ }
-    const bar = $('[data-gallery-bar]');
-    if (bar) gallery.addEventListener('scroll', () => requestAnimationFrame(() => {
-      const max = gallery.scrollWidth - gallery.clientWidth;
-      bar.style.setProperty('--progress', max > 0 ? (gallery.scrollLeft + gallery.clientWidth) / gallery.scrollWidth : 1);
-    }), { passive: true });
+    const dots = $$('[data-gallery-dot]');
+    if (dots.length) {
+      gallery.addEventListener('scroll', () => requestAnimationFrame(() => {
+        const i = Math.round(gallery.scrollLeft / Math.max(1, gallery.clientWidth));
+        dots.forEach((d, k) => d.toggleAttribute('aria-current', k === i));
+      }), { passive: true });
+      dots.forEach((d, k) => d.addEventListener('click', () => gallery.scrollTo({ left: k * gallery.clientWidth, behavior: MOTION_OK() ? 'smooth' : 'auto' })));
+    }
   }
 
   // recently viewed: shown under the product (the theme stored them without a section)
@@ -1029,6 +1086,231 @@ document.addEventListener('submit', e => {
 })();
 
 
+
+/* ---------- "Non sei sicuro della tua taglia?": the size-suggestions modal (integrated1 sizesuggestions) ----
+   Live: two steps (usual size, height, weight; then body, belly, age, fit), then POST /api/recommend and
+   "La tua taglia consigliata" with a compatibility score. The preview estimates on the device with the same
+   inputs: chest from height and weight, the fit offsets the live info page states (slim -3 cm, relaxed
+   +4 cm), the brand table when the service has one, else a generic table. Inputs stay in this browser. */
+(() => {
+  const form = $('[data-size-advisor]');
+  const pj = $('#product-json');
+  if (!form || !pj) return;
+  const P = JSON.parse(pj.textContent);
+  const KEY = 'sks-fit';
+  const shoes = form.dataset.kind === 'shoes', female = form.dataset.gender === 'F';
+  const steps = $$('[data-sz-step]', form), result = $('[data-sz-result]', form), err = $('[data-sz-error]', form);
+  const bars = $$('.sz-progress span', form);
+  // generic body-chest tables (cm) when the brand has none in the size service
+  const GENERIC = female
+    ? [['XS', 78, 82], ['S', 82, 86], ['M', 86, 92], ['L', 92, 98], ['XL', 98, 104], ['XXL', 104, 110]]
+    : [['XS', 84, 88], ['S', 88, 94], ['M', 94, 100], ['L', 100, 106], ['XL', 106, 112], ['XXL', 112, 118]];
+  const chart = form.dataset.chart ? JSON.parse(form.dataset.chart) : GENERIC;
+  // Italian numeric sizes some brands use instead of letters
+  const IT = female ? { XS: '38', S: '40', M: '42', L: '44', XL: '46', XXL: '48' } : { XS: '44', S: '46', M: '48', L: '50', XL: '52', XXL: '54' };
+  const saved = store.get(KEY, {});
+  const state = { usual: saved.usual ?? null, body: saved.body || 'regular', belly: saved.belly || 'average', age: saved.age || '26-40', fit: saved.fit || 'regular' };
+  if (saved.height) form.height && (form.height.value = saved.height);
+  if (saved.weight) form.weight && (form.weight.value = saved.weight);
+  const press = (grp, val) => $$(`[data-grp="${grp}"]`, form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.val === val)));
+  ['body', 'belly', 'age', 'fit'].forEach(g => press(g, state[g]));
+  if (state.usual != null) $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.usual === state.usual)));
+
+  function show(n) {
+    steps.forEach(s => { s.hidden = s.dataset.szStep !== String(n); });
+    result.hidden = n !== 'result';
+    bars.forEach((b, i) => b.classList.toggle('is-active', n === 'result' || i === n - 1));
+  }
+  function fail(msg, field) { err.textContent = msg; err.hidden = false; field?.focus(); }
+  const sizeOf = label => P.sizes.find(s => s[0] === label) || P.sizes.find(s => s[0] === IT[label]);
+
+  function estimate() {
+    if (shoes) {
+      const n = state.usual;
+      return { size: n, pct: form.ref_brand.value === 'Non lo so' ? 72 : 84, basis: `il tuo numero abituale${form.ref_brand.value !== 'Non lo so' ? ` in ${form.ref_brand.value}` : ''}` };
+    }
+    const h = +form.height.value, w = +form.weight.value;
+    // chest from height and weight (fitted on ANSUR-like averages), then body, belly and fit
+    let chest = 0.5 * w + 0.25 * h + (female ? 6 : 15);
+    chest += { slim: -2, regular: 0, curvy: 3 }[state.body] + { flat: -1, average: 0, round: 2 }[state.belly];
+    chest += { slim: -3, regular: 0, relaxed: 4 }[state.fit];
+    let i = chart.findIndex(([, lo, hi]) => chest >= lo && chest < hi);
+    if (i < 0) i = chest < chart[0][1] ? 0 : chart.length - 1;
+    const u = chart.findIndex(r => r[0] === state.usual);
+    if (u >= 0 && Math.abs(u - i) === 1) i = Math.round((i + u) / 2 + (state.fit === 'relaxed' ? 0.25 : -0.25)); // the usual size weighs in
+    const [label, lo, hi] = chart[i];
+    const mid = (lo + hi) / 2, half = (hi - lo) / 2;
+    const off = Math.min(1.5, Math.abs(chest - mid) / half);
+    const pct = Math.round(Math.max(45, 96 - off * 30 - (state.usual ? 0 : 6)));
+    return { size: label, pct, basis: `altezza ${h} cm, peso ${w} kg${state.usual ? `, taglia abituale ${state.usual}` : ''}` };
+  }
+
+  function render(r) {
+    const s = sizeOf(r.size);
+    const label = s ? s[0] : r.size;
+    const note = r.pct >= 90 ? 'misure al centro della taglia' : r.pct >= 70 ? 'buona vestibilità' : r.pct >= 50 ? 'valuta anche la taglia vicina' : 'stima indicativa';
+    const dots = '●'.repeat(Math.round(r.pct / 25)).padEnd(4, '○');
+    result.innerHTML = `<p class="sz-result__label">La tua taglia consigliata</p>
+      <p class="sz-result__size">${SKS_FMT.esc(label)}</p>
+      <p class="sz-result__conf"><span aria-hidden="true">${dots}</span> Compatibilità ${r.pct}%: ${note}</p>
+      ${s && !s[1] ? `<p class="sz-result__warn">La taglia consigliata per te è ${SKS_FMT.esc(label)}, ma non è disponibile in questo colore.</p>
+        <button type="button" class="button button--outline button--block" data-sz-notify="${SKS_FMT.esc(label)}">Avvisami quando torna la ${SKS_FMT.esc(label)}</button>`
+      : s ? `<button type="button" class="button button--primary button--block" data-sz-add="${SKS_FMT.esc(label)}">Aggiungi la ${SKS_FMT.esc(label)} al carrello</button>`
+      : `<p class="sz-result__warn">Questo modello non ha la ${SKS_FMT.esc(label)}: guarda le taglie disponibili o chiedici un consiglio.</p>`}
+      <p class="meta">Basato su: ${SKS_FMT.esc(r.basis)}.</p>
+      <p><button type="button" class="link-small" data-sz-restart>Rifai il test</button></p>`;
+    show('result');
+    result.querySelector('button')?.focus();
+  }
+
+  form.addEventListener('click', e => {
+    const u = e.target.closest('[data-usual]');
+    if (u) { state.usual = u.dataset.usual; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b === u))); err.hidden = true; return; }
+    const g = e.target.closest('[data-grp]');
+    if (g) { state[g.dataset.grp] = g.dataset.val; press(g.dataset.grp, g.dataset.val); return; }
+    if (e.target.closest('[data-sz-next]')) {
+      err.hidden = true;
+      if (shoes) { if (!state.usual) return fail('Scegli il numero che porti di solito.', $('[data-usual]', form)); store.set(KEY, { ...store.get(KEY, {}), usual: state.usual }); return render(estimate()); }
+      const h = +form.height.value, w = +form.weight.value;
+      if (!(h >= 100 && h <= 250)) return fail('Scrivi l’altezza in centimetri, per esempio 175.', form.height);
+      if (!(w >= 30 && w <= 250)) return fail('Scrivi il peso in chili, per esempio 70.', form.weight);
+      show(2); $('[data-sz-step="2"] .sz-chip[aria-pressed="true"]', form)?.focus(); return;
+    }
+    if (e.target.closest('[data-sz-back]')) { show(1); return; }
+    if (e.target.closest('[data-sz-restart]')) { show(1); return; }
+    if (e.target.closest('[data-sz-forget]')) { store.set(KEY, {}); form.reset(); state.usual = null; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', 'false')); show(1); toast('Dati della taglia cancellati da questo browser.'); return; }
+    const how = e.target.closest('[data-sz-how]');
+    if (how) { const box = $('#sz-how'); box.hidden = !box.hidden; how.setAttribute('aria-expanded', String(!box.hidden)); return; }
+    const add = e.target.closest('[data-sz-add]');
+    if (add) {
+      // the buy box takes the size too, so the page and the cart agree
+      const r = $$('input[name="size"]').find(i => i.value === add.dataset.szAdd);
+      if (r && !r.checked) r.click();
+      addWithFeedback(add, { handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, image: P.image }, add.dataset.szAdd);
+      return;
+    }
+    const nt = e.target.closest('[data-sz-notify]');
+    if (nt) { closeDialog(form.closest('dialog')); const l = $('[data-notify-label]'); if (l) l.textContent = nt.dataset.szNotify; setTimeout(() => openDialog('notify-dialog'), 340); }
+  });
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    store.set(KEY, { usual: state.usual, height: form.height?.value, weight: form.weight?.value, body: state.body, belly: state.belly, age: state.age, fit: state.fit });
+    render(estimate());
+  });
+  form.closest('dialog')?.addEventListener('dialog:open', () => { err.hidden = true; if (!result.hidden) return; show(1); });
+})();
+
+/* ---------- "Scelti per te": the sources of integrated1's for-you endpoint, on the device ----------
+   Live (/apps/wishlist/for-you, platform/apps/back-in-stock/app/modules/for-you/picker.server.ts) the answer
+   comes, in this order, from the session's last search (up to half), a recognised customer's own picks,
+   pieces like the ones seen on this device, and the most wanted pieces in the page's context. The preview
+   has no customers: search, then seen, then the fallback the page already shows. The same picks fill
+   "Completa con" in the cart, with the cart's products excluded (owner, 01/10). */
+const ForYou = (() => {
+  let pool = null, loading = null;
+  function load() {
+    if (pool) return Promise.resolve(pool);
+    return loading ||= new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = BASE + 'assets/data/for-you.js';
+      s.onload = () => { pool = window.SKS_FORYOU || []; registerCards(pool); resolve(pool); };
+      s.onerror = () => { loading = null; reject(new Error('for-you pool')); };
+      document.head.append(s);
+    });
+  }
+  const lastSearch = () => { try { return sessionStorage.getItem('sks-last-q') || ''; } catch { return ''; } };
+  const signal = () => trackingOK() && !!(lastSearch() || Recent.list.length);
+  function pick({ exclude = [], audience = '', limit = 8 } = {}) {
+    const out = [], seen = new Set(exclude.filter(Boolean)), perBrand = {};
+    const fits = p => !audience || p.gender === audience || p.gender === 'unisex';
+    const add = (p, source) => {
+      if (out.length >= limit || seen.has(p.handle) || !fits(p) || (perBrand[p.brand] || 0) >= 2) return;
+      perBrand[p.brand] = (perBrand[p.brand] || 0) + 1; seen.add(p.handle); out.push({ p, source });
+    };
+    const tracked = trackingOK();
+    const words = tracked ? SKS_FMT.normalize(lastSearch()).split(' ').filter(w => w.length > 2) : [];
+    if (words.length) pool.filter(p => { const t = SKS_FMT.normalize(`${p.title} ${p.brand}`); return words.every(w => t.includes(w)); })
+      .slice(0, Math.ceil(limit / 2)).forEach(p => add(p, 'search'));
+    const viewed = tracked ? Recent.list.slice(0, 6).map(r => pool.find(p => p.handle === r.handle) || r) : [];
+    viewed.forEach(v => seen.add(v.handle));
+    if (viewed.length) {
+      const score = p => Math.max(...viewed.map(v => (p.typeKey && p.typeKey === v.typeKey ? 3 : 0) + (p.brand === v.brand ? 2 : 0) + (v.gender && p.gender === v.gender ? 1 : 0)));
+      pool.map(p => [p, score(p)]).filter(([, s]) => s >= 2).sort((a, b) => b[1] - a[1] || a[0].rank - b[0].rank).forEach(([p]) => add(p, 'similar'));
+    }
+    pool.forEach(p => add(p, 'popular'));
+    return out;
+  }
+  return { load, pick, signal };
+})();
+
+// home and product page: swap the fallback for the visitor's picks before the rail comes into view
+$$('[data-for-you]').forEach(sec => {
+  if (!ForYou.signal()) return; // nothing known about this visit: the page's list is already the answer
+  const track = $('.rail__track', sec), lead = $('[data-for-you-lead]', sec);
+  const io = new IntersectionObserver(([e]) => {
+    if (!e.isIntersecting) return;
+    io.disconnect();
+    if (sec.getBoundingClientRect().top < innerHeight) return; // already on screen: keep it still
+    ForYou.load().then(() => {
+      const picks = ForYou.pick({ exclude: [sec.dataset.exclude, ...Cart.lines.map(l => l.handle)], audience: sec.dataset.audience, limit: 10 });
+      if (!picks.some(x => x.source !== 'popular') || sec.getBoundingClientRect().top < innerHeight) return;
+      track.innerHTML = picks.map(({ p }) => SKS_CARD.render(p, { base: BASE, sizes: '(min-width: 1201px) 206px, (min-width: 901px) 180px, (min-width: 601px) 160px, 40vw' })).join('');
+      lead.textContent = picks[0].source === 'search' ? 'Scelti in base alla tua ultima ricerca.' : 'Scelti in base ai capi che hai guardato.';
+      renderWishState();
+      $('[data-rail]', sec)?.dispatchEvent(new Event('rail:update'));
+    }).catch(() => {});
+  }, { rootMargin: '0px 0px 700px 0px' });
+  io.observe(sec);
+});
+
+// cart: "Completa con" from the same picks, the cart's products excluded, its audience kept
+(() => {
+  const box = $('[data-cart-suggest]');
+  if (!box) return;
+  const list = $('[data-cart-suggest-list]', box), why = $('[data-cart-suggest-why]', box);
+  let signature = '';
+  function render() {
+    const lines = Cart.lines;
+    const sig = lines.map(l => l.handle).sort().join(',');
+    if (sig === signature) return;
+    signature = sig;
+    if (!lines.length) { box.hidden = true; return; }
+    ForYou.load().then(pool => {
+      const genders = lines.map(l => (pool.find(p => p.handle === l.handle) || {}).gender).filter(g => g && g !== 'unisex');
+      const audience = genders.length && genders.every(g => g === genders[0]) ? genders[0] : '';
+      const picks = ForYou.pick({ exclude: lines.map(l => l.handle), audience, limit: 4 });
+      list.innerHTML = picks.map(({ p }) => {
+        const avail = p.sizes.filter(s => s[1]);
+        const info = SKS_FMT.esc(JSON.stringify({ handle: p.handle, title: p.title, brand: p.brand, price: p.price, compareAt: p.compareAt || 0, image: p.images[0] }));
+        const one = avail.length === 1;
+        return `<li class="mini-card">
+          <a class="mini-card__media" href="${productUrl(p.handle)}" tabindex="-1" aria-hidden="true"><img src="${SKS_FMT.cdn(p.images[0], 160)}" srcset="${SKS_FMT.srcset(p.images[0], [120, 160, 240], 0, SKS_FMT.nativeWidth(p.images[0]))}" sizes="80px" width="80" height="80" alt="" loading="lazy"></a>
+          <div class="mini-card__info">
+            <p class="mini-card__brand" translate="no">${SKS_FMT.esc(p.brand)}</p>
+            <p class="mini-card__title"><a href="${productUrl(p.handle)}">${SKS_FMT.esc(SKS_CARD.splitTitle(p.title)[0])}</a></p>
+            <p class="mini-card__price">${SKS_FMT.money(p.price)}</p>
+          </div>
+          ${one ? `<button type="button" class="button button--small button--outline" data-add-product="${info}" data-size="${SKS_FMT.esc(avail[0][0])}" aria-label="Aggiungi ${SKS_FMT.esc(p.title)}, ${SKS_FMT.esc(SKS_FMT.sizeLabel(avail[0][0]).toLowerCase())}">Aggiungi</button>`
+            : `<button type="button" class="button button--small button--outline" data-suggest-sizes aria-expanded="false">Scegli la taglia</button>
+          <div class="mini-card__sizes" role="group" aria-label="Taglie di ${SKS_FMT.esc(p.title)}" hidden>${avail.map(s => `<button type="button" class="size-chip" data-add-product="${info}" data-size="${SKS_FMT.esc(s[0])}" aria-label="Aggiungi la taglia ${SKS_FMT.esc(s[0])}">${SKS_FMT.esc(s[0])}</button>`).join('')}</div>`}
+        </li>`;
+      }).join('');
+      why.textContent = picks.some(x => x.source === 'similar' || x.source === 'search') ? 'Scelti per te, in base a quello che hai guardato.' : 'Scelti per te tra i capi più richiesti.';
+      box.hidden = !picks.length;
+    }).catch(() => { box.hidden = true; });
+  }
+  // only while the drawer is open: the pool is never fetched on a plain page load (bandwidth for the LCP)
+  const drawer = document.getElementById('cart-drawer');
+  document.addEventListener('cart:rendered', () => { if (drawer?.open) render(); });
+  drawer?.addEventListener('dialog:open', render);
+  box.addEventListener('click', e => {
+    const t = e.target.closest('[data-suggest-sizes]');
+    if (!t) return;
+    const sizes = t.nextElementSibling, open = sizes.hidden;
+    sizes.hidden = !open; t.setAttribute('aria-expanded', String(open));
+    if (open) sizes.querySelector('button')?.focus();
+  });
+})();
 
 /* ---------- cart page, checkout summary, wishlist, search results ---------- */
 (() => {
@@ -1078,6 +1360,7 @@ document.addEventListener('submit', e => {
     const q = new URLSearchParams(location.search).get('q') || '';
     const input = $('#search-page-input'); input.value = q;
     if (!q) { $('[data-search-page-count]').textContent = 'Scrivi cosa cerchi: un capo, una marca, una categoria.'; return; }
+    if (trackingOK()) { try { sessionStorage.setItem('sks-last-q', q); } catch { /* private mode */ } }
     $('[data-search-title]').textContent = `Risultati per “${q}”`;
     document.title = `Risultati per “${q}” | Ski Sises`;
     window.SKS_SEARCH_API.loadIndex().then(index => {
@@ -1294,6 +1577,47 @@ document.addEventListener('submit', e => {
     });
   }
   fill();
+})();
+
+/* ---------- cookie choice, then the -10% teaser ----------
+   In the theme the banner is Shopify's customer privacy banner (its choice goes to the Customer Privacy API)
+   and the teaser is Prestige's newsletter popup collapsed; here the choice stays on the device. */
+(() => {
+  const banner = $('[data-cookie-banner]'), teaser = $('[data-nl-teaser]');
+  const consent = () => store.get('sks-consent', null);
+  function showTeaser() {
+    if (!teaser || store.get('sks-nl-dismissed', false)) return;
+    teaser.hidden = false;
+  }
+  function decide(value) {
+    store.set('sks-consent', value);
+    if (banner) banner.hidden = true;
+    ROOT.classList.remove('has-cookie-banner');
+    announce(value === 'all' ? 'Cookie accettati' : 'Scelta salvata: solo i cookie necessari e quelli che hai scelto');
+    setTimeout(showTeaser, 1200);
+  }
+  if (banner && consent() == null) {
+    banner.hidden = false;
+    ROOT.classList.add('has-cookie-banner');
+    banner.addEventListener('click', e => {
+      const b = e.target.closest('[data-cookie]');
+      if (!b) return;
+      const what = b.dataset.cookie;
+      if (what === 'accept') decide('all');
+      else if (what === 'reject') decide('necessary');
+      else if (what === 'prefs') { $('[data-cookie-main]', banner).hidden = true; const f = $('[data-cookie-prefs]', banner); f.hidden = false; f.querySelector('input:not([disabled])')?.focus(); }
+    });
+    $('[data-cookie-prefs]', banner).addEventListener('submit', e => {
+      e.preventDefault();
+      const f = e.target;
+      decide({ analytics: f.analytics.checked, marketing: f.marketing.checked, preferences: f.preferences.checked });
+    });
+  } else setTimeout(showTeaser, 1500);
+  if (teaser) teaser.addEventListener('click', e => {
+    if (e.target.closest('[data-nl-dismiss]')) { teaser.hidden = true; store.set('sks-nl-dismissed', true); }
+  });
+  // a completed sign-up retires the teaser
+  document.addEventListener('submit', e => { if (e.target.closest('[data-nl-form]') && e.target.checkValidity()) { store.set('sks-nl-dismissed', true); if (teaser) teaser.hidden = true; } }, true);
 })();
 
 /* ---------- design comments (prototype only, never ported to the theme) ----------
