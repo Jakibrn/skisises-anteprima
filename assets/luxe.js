@@ -465,17 +465,14 @@ function renderCart(newKey) {
   const text = $('[data-cart-count-text]'); if (text) text.textContent = count ? `(${count})` : '';
   const left = Math.max(0, FREE_SHIPPING - subtotal);
   $$('[data-shipping-text]').forEach(t => {
-    t.innerHTML = !count ? 'Spedizione gratuita in Italia da 50,00&nbsp;€'
-      : left > 0 ? `Ti mancano <strong>${SKS_FMT.money(left)}</strong> per la spedizione gratuita in Italia`
-      : '<strong>Spedizione gratuita</strong> in Italia: sbloccata';
+    t.innerHTML = !count ? 'Spedizione gratuita in Italia per ordini superiori a €50'
+      : left > 0 ? `Ti mancano <strong>${SKS_FMT.money(left)}</strong> per ottenere la spedizione gratuita!`
+      : 'Hai diritto alla spedizione gratuita!';
   });
   $$('[data-shipping-bar]').forEach(b => b.style.setProperty('--pct', Math.min(1, subtotal / FREE_SHIPPING)));
   $$('[data-cart-subtotal]').forEach(s => { s.textContent = SKS_FMT.money(subtotal); });
-  $$('[data-club-cart]').forEach(el => {
-    const pts = SKS_FMT.clubPoints(subtotal);
-    el.hidden = !count || !pts;
-    $('[data-club-points]', el).textContent = `${pts} punti (${SKS_FMT.money(pts * 0.05)})`;
-  });
+  // the loyalty widget's cart line ("Accedi per usare i tuoi punti sui prodotti non scontati.") when the cart earns points
+  $$('[data-club-cart]').forEach(el => { el.hidden = !count || !SKS_FMT.clubPoints(subtotal); });
   $$('[data-cart-shipping]').forEach(s => { s.textContent = !count ? '' : left > 0 ? '5,90\u00a0€ in Italia' : 'gratuita in Italia'; });
   document.dispatchEvent(new CustomEvent('cart:rendered', { detail: { subtotal } }));
   $$('[data-cart-lines]').forEach(list => {
@@ -683,7 +680,7 @@ const Recent = {
     idle.hidden = true; out.hidden = false;
     const url = `${BASE}search.html?q=${encodeURIComponent(raw)}`;
     if (!r.products.length && !r.brands.length && !r.colls.length && !r.articles.length && !r.pages.length) {
-      out.innerHTML = `<div class="search-empty"><h3>Nessun risultato per “${SKS_FMT.esc(raw)}”</h3><p class="muted">Prova con il nome della marca o del capo, per esempio “piumino” o “Barbour”. Oppure chiedi a noi in negozio: ${'+39 015 405464'}.</p><ul class="chips" role="list" style="margin-top:16px">${['Barbour', 'Piumino', 'Samba', 'Pedule'].map(s => `<li><button type="button" class="chip" data-search-suggest="${s}">${s}</button></li>`).join('')}</ul></div>`;
+      out.innerHTML = `<div class="search-empty"><h3>Non sono stati trovati risultati per "${SKS_FMT.esc(raw)}"</h3><ul class="chips" role="list" style="margin-top:16px">${['Barbour', 'Piumino', 'Samba', 'Pedule'].map(s => `<li><button type="button" class="chip" data-search-suggest="${s}">${s}</button></li>`).join('')}</ul></div>`;
       return;
     }
     const products = r.products.slice(0, 8).map(p => ({ handle: p[0], title: p[1], brand: p[2], price: p[5], image: p[6] }));
@@ -982,7 +979,8 @@ $$('[data-for-you]').forEach(sec => {
       const picks = ForYou.pick({ exclude: [sec.dataset.exclude, ...Cart.lines.map(l => l.handle)], audience: sec.dataset.audience, limit: 10 });
       if (!picks.some(x => x.source !== 'popular') || sec.getBoundingClientRect().top < innerHeight) return;
       track.innerHTML = picks.map(({ p }) => SKS_CARD.render(p, { base: BASE, sizes: '(min-width: 1201px) 206px, (min-width: 901px) 180px, (min-width: 601px) 160px, 40vw' })).join('');
-      lead.textContent = picks[0].source === 'search' ? 'Scelti in base alla tua ultima ricerca.' : 'Scelti in base ai capi che hai guardato.';
+      // the live section's reasons (sections/for-you.liquid)
+      lead.textContent = picks[0].source === 'search' ? 'In base alla tua ricerca' : 'Simili a quelli che hai visto';
       renderWishState();
       $('[data-rail]', sec)?.dispatchEvent(new Event('rail:update'));
     }).catch(() => {});
@@ -1022,7 +1020,8 @@ $$('[data-for-you]').forEach(sec => {
           <div class="mini-card__sizes" role="group" aria-label="Taglie di ${SKS_FMT.esc(p.title)}" hidden>${avail.map(s => `<button type="button" class="size-chip" data-add-product="${info}" data-size="${SKS_FMT.esc(s[0])}" aria-label="Aggiungi la taglia ${SKS_FMT.esc(s[0])}">${SKS_FMT.esc(s[0])}</button>`).join('')}</div>`}
         </li>`;
       }).join('');
-      why.textContent = picks.some(x => x.source === 'similar' || x.source === 'search') ? 'Scelti per te, in base a quello che hai guardato.' : 'Scelti per te tra i capi più richiesti.';
+      // the live section's reasons (sections/for-you.liquid)
+      why.textContent = picks.some(x => x.source === 'similar' || x.source === 'search') ? 'Simili a quelli che hai visto' : 'I più amati del momento';
       box.hidden = !picks.length;
     }).catch(() => { box.hidden = true; });
   }

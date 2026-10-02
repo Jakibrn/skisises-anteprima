@@ -164,7 +164,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
         .filter(x => (x.hit || x.named) && (!gender || x.l[2] === gender))
         .sort((a, b) => (b.inSeason - a.inSeason) || (b.hit - a.hit) || (b.l[6] - a.l[6])).slice(0, MAX_LOOKS).map(x => x.l);
     };
-    const lookHtml = l => `<div class="grid-look"><article class="look-card"><a class="look-card__link" href="${BASE}pages/outfits/${l[0]}.html" data-look-viewer="${l[0]}"><span class="look-card__media" data-vt-look><img src="${SKS_FMT.cdn(l[3], 720, 900, 'top')}" srcset="${SKS_FMT.srcset(l[3], [360, 540, 720], 1.25, 941, 'top')}" sizes="(min-width: 1024px) 44vw, 92vw" alt="" loading="lazy" width="720" height="900"></span><span class="look-card__title">${SKS_FMT.esc(l[1])}</span></a><p class="look-card__meta">${l[6]} ${l[6] === 1 ? 'capo disponibile' : 'capi disponibili'}, ${SKS_FMT.money(l[7])}</p></article></div>`;
+    const lookHtml = l => `<div class="grid-look"><article class="look-card"><a class="look-card__link" href="${BASE}pages/outfits/${l[0]}.html" data-look-viewer="${l[0]}"><span class="look-card__media" data-vt-look><img src="${SKS_FMT.cdn(l[3], 720, 900, 'top')}" srcset="${SKS_FMT.srcset(l[3], [360, 540, 720], 1.25, 941, 'top')}" sizes="(min-width: 1024px) 44vw, 92vw" alt="" loading="lazy" width="720" height="900"></span><span class="look-card__title">${SKS_FMT.esc(l[1])}</span></a><p class="look-card__meta"><span>Scopri il Look · ${l[6]}</span></p></article></div>`;
     const grid = $('[data-search-page-grid]'), more = $('[data-search-more]'), sentinel = $('[data-search-sentinel]');
     const page = () => {
       const from = state.shown, to = Math.min(state.list.length, from + STEP), slice = state.list.slice(from, to);
@@ -230,12 +230,11 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
 (() => {
   const form = $('[data-look-form]');
   if (!form) return;
-  const btn = $('[data-add-look]', form), status = $('[data-look-status]', form);
+  const btn = $('[data-add-look]', form);
   const rows = () => $$('[data-piece]', form).filter(li => !li.classList.contains('is-unavailable'));
   // only an available size counts: a sold-out pick is for "Avvisami"
   const chosen = li => (li.querySelector('input[type="radio"]:checked:not([data-sold])') || {}).value;
   const pending = () => rows().filter(li => chosen(li) && li.dataset.added !== chosen(li));
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const bell = '<svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>';
   // the piece's own button follows its size: sold out asks to be told, otherwise it adds
   function syncPiece(li) {
@@ -249,23 +248,11 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     li.dataset.added = size; li.classList.add('is-added');
     const t = li.querySelector('.look-piece__title'); if (t) t.dataset.added = size;
   }
-  function sync() {
-    if (!btn) return; // every piece is sold out: the page says so, nothing to add in one go
-    const p = pending(), missing = rows().filter(li => !chosen(li) && !li.dataset.added).length;
-    const changes = p.filter(li => li.dataset.added).length, adds = p.length - changes, someAdded = rows().some(li => li.dataset.added);
-    btn.disabled = !p.length;
-    btn.textContent = p.length
-      ? (!changes ? `Aggiungi ${adds === 1 ? 'il capo' : `i ${adds} capi`} al carrello`
-        : !adds ? `Cambia ${changes === 1 ? 'la taglia' : `le ${changes} taglie`} nel carrello`
-        : `Aggiungi ${plural(adds, 'capo', 'capi')} e cambia ${changes === 1 ? 'una taglia' : `${changes} taglie`}`)
-      : !missing && someAdded ? 'Tutto nel carrello'
-      : someAdded ? `Scegli la taglia ${missing === 1 ? 'del capo rimanente' : `dei ${missing} capi rimanenti`}` : 'Scegli le taglie';
-    if (status && !status.dataset.sticky) status.textContent = missing ? `${plural(missing, 'capo', 'capi')} senza taglia: ${missing === 1 ? 'sceglila per aggiungerlo' : 'sceglila per aggiungerli'}.` : 'Tutte le taglie scelte.';
-  }
+  // the button keeps the live label, "Aggiungi tutto"; what it adds is what has an available size chosen
+  function sync() { if (btn) btn.disabled = false; }
   form.addEventListener('change', e => {
     const li = e.target.closest('[data-piece]');
     if (li) { syncPiece(li); const h = $('[data-piece-hint]', li); if (h) h.hidden = true; li.classList.remove('is-missing'); }
-    if (status) delete status.dataset.sticky;
     sync();
   });
   // one piece: its size, or the hint; a sold-out size opens the back-in-stock request
@@ -285,7 +272,6 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     if (li.dataset.added && li.dataset.added !== size) Cart.remove(info.handle + '|' + li.dataset.added);
     await addWithFeedback(b, info, size, false);
     mark(li, size);
-    if (status) { status.dataset.sticky = '1'; status.textContent = `${info.title}, taglia ${size}: nel carrello.`; }
     sync();
     setTimeout(() => syncPiece(li), 1900); // after the shared "Aggiunto" feedback restores its label
   });
@@ -294,21 +280,20 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const add = pending();
-    if (!add.length) return;
+    if (!add.length) {
+      const missing = rows().filter(li => !chosen(li) && !li.dataset.added);
+      missing.forEach(li => { li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false; });
+      missing[0]?.querySelector('input[type="radio"]:not([data-sold])')?.focus();
+      return;
+    }
     const items = add.map(li => [infoFromCard(li.dataset.piece), chosen(li), li]).filter(x => x[0]);
     // a piece already in the bag in another size: that line is replaced, never doubled
-    const changed = items.filter(([info, , li]) => li.dataset.added && Cart.remove(info.handle + '|' + li.dataset.added));
+    items.filter(([info, , li]) => li.dataset.added && Cart.remove(info.handle + '|' + li.dataset.added));
     const [first, ...rest] = items;
     for (const [info, size] of rest) Cart.add(info, size);
     await addWithFeedback(btn, first[0], first[1]);
     for (const [, size, li] of items) mark(li, size);
-    const missing = rows().filter(li => !chosen(li) && !li.dataset.added).length, added = items.length - changed.length;
-    if (status) {
-      status.dataset.sticky = '1';
-      status.textContent = [added ? `${plural(added, 'capo aggiunto', 'capi aggiunti')} al carrello.` : '', changed.length ? `${changed.length === 1 ? 'Taglia cambiata' : `${changed.length} taglie cambiate`} nel carrello.` : '', missing ? `${plural(missing, 'capo', 'capi')} senza taglia.` : ''].filter(Boolean).join(' ');
-    }
-    sync();
-    setTimeout(sync, 1900); // after the shared "Aggiunto" feedback restores its label
+    rows().filter(li => !chosen(li) && !li.dataset.added).forEach(li => { li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false; });
   });
   sync();
 })();
@@ -400,8 +385,9 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
       unit = dayPrice(cur.d, s.days); label = `${s.days} ${s.days === 1 ? 'giorno' : 'giorni'}`;
       const seasonMin = cur.s && cur.s.length ? Math.min(...cur.s.map(x => x.p)) : null;
       if (seasonMin != null && unit > seasonMin) {
-        if (cur.s.length === 1) { note = `Per ${s.days} giorni conviene la stagionale: applichiamo ${SKS_FMT.money(seasonMin)} invece di ${SKS_FMT.money(unit)}.`; unit = seasonMin; label += ' · tariffa stagionale'; }
-        else note = `Per ${s.days} giorni conviene una tariffa stagionale, da ${SKS_FMT.money(seasonMin)}.`;
+        // the live simulator's prompt
+        if (cur.s.length === 1) { unit = seasonMin; label += ' · Stagionale'; }
+        note = 'Conviene la stagionale';
       }
     }
     const who = $('[data-rq-who-wrap]', el).hidden ? '' : (s.who === 'bambino' ? 'Bambino · ' : 'Adulto · ');
@@ -415,11 +401,11 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     $('[data-rq-line]', el).textContent = `${c.title} · ${c.sub}: ${SKS_FMT.money(c.total)}`;
     const n = $('[data-rq-note]', el); n.hidden = !c.note; n.textContent = c.note;
     const list = $('[data-rq-lines]', el);
-    list.innerHTML = lines.map((l, i) => `<li class="rq-line"><span><strong>${SKS_FMT.esc(l.title)}</strong><br><span class="meta">${SKS_FMT.esc(l.sub)}</span></span><span class="tabular">${SKS_FMT.money(l.total)}</span><button type="button" class="icon-button" data-rq-remove="${i}" aria-label="Togli ${SKS_FMT.esc(l.title)} dal preventivo"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></li>`).join('');
+    list.innerHTML = !lines.length ? '<li class="rq-empty meta">Nessun articolo aggiunto. Componi il noleggio qui accanto e premi “Aggiungi al preventivo”.</li>' : lines.map((l, i) => `<li class="rq-line"><span><strong>${SKS_FMT.esc(l.title)}</strong><br><span class="meta">${SKS_FMT.esc(l.sub)}</span></span><span class="tabular">${SKS_FMT.money(l.total)}</span><button type="button" class="icon-button" data-rq-remove="${i}" aria-label="Togli ${SKS_FMT.esc(l.title)} dal preventivo"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></li>`).join('');
     const total = lines.length ? lines.reduce((t, l) => t + l.total, 0) : c.total;
     $('[data-rq-total]', el).textContent = SKS_FMT.money(total);
     const d = el.querySelector('[data-rq-date]')?.value, p = $('[data-rq-pickup]', el);
-    p.hidden = !d; p.textContent = d ? `Ritiro in negozio: ${fmtDate(d)}` : '';
+    p.hidden = !d; p.textContent = d ? `Data di ritiro: ${fmtDate(d)}` : '';
   }
   // the same item for the same duration is one line: adding it again updates it (journey: skis counted twice)
   function addLine() {
@@ -428,20 +414,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     if (i >= 0) { lines[i] = c; compute(); toast(`${c.title} è già nel preventivo: riga aggiornata.`); return; }
     lines.push(c); compute(); announce(`${c.title} aggiunto al preventivo`);
   }
-  function pack() {
-    const keep = { ...s }, skipped = [];
-    const items = s.who === 'bambino'
-      ? [['sci', 'bambino', 0], ['scarponi', 'bambino', 0], ['casco', 'bambino', 0]]
-      : [['sci', 'adulto', 0], ['scarponi', 'adulto', 0], ['casco', 'adulto', 0]];
-    for (const [cat, who, vi] of items) {
-      if (lines.some(l => l.cat === cat && l.who === who)) { skipped.push(D[cat].label.toLowerCase()); continue; }
-      s.cat = cat; s.who = who; s.vi = vi; s.si = 0; if (!hasDay(v())) s.mode = 'season'; const c = current(); if (c) lines.push(c);
-    }
-    Object.assign(s, keep);
-    fill();
-    if (skipped.length) toast(`Pacchetto sci aggiunto. Già nel preventivo: ${skipped.join(', ')}.`);
-    else announce('Pacchetto sci aggiunto al preventivo');
-  }
+
   el.addEventListener('change', e => {
     const k = e.target.dataset.rq; if (!k) return;
     if (k === 'cat') { s.cat = e.target.value; s.vi = 0; s.si = 0; s.who = 'adulto'; }
@@ -455,7 +428,6 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     const st = e.target.closest('[data-rq-step]');
     if (st) { const k = st.dataset.rqStep; s[k] = Math.max(1, Math.min(k === 'days' ? 30 : 10, s[k] + +st.dataset.dir)); compute(); return; }
     if (e.target.closest('[data-rq-add]')) { addLine(); return; }
-    if (e.target.closest('[data-rq-pack]')) { pack(); return; }
     const rm = e.target.closest('[data-rq-remove]'); if (rm) { lines.splice(+rm.dataset.rqRemove, 1); compute(); return; }
     if (e.target.closest('[data-rq-send]')) {
       const d = el.querySelector('[data-rq-date]').value;

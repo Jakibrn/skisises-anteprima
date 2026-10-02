@@ -35,11 +35,9 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
         </header>
         <ul class="look-viewer__pieces" role="list" data-lv-pieces></ul>
         <footer class="look-viewer__foot">
-          <p class="look-viewer__total" data-lv-total></p>
           <button type="button" class="button button--primary button--block" data-lv-add></button>
           <p class="look-viewer__status" role="status" data-lv-status></p>
-          <p class="look-viewer__links"><a class="link-arrow" data-lv-page href="#"><span>Vedi la pagina del look</span> ${icon('arrow-right')}</a></p>
-          <p class="look-viewer__trust">Spedizione gratuita in Italia da 50,00&nbsp;€ · Reso entro 14 giorni</p>
+          <p class="look-viewer__links"><a class="link-arrow" data-lv-page href="#"><span>Vedi più dettagli</span> ${icon('arrow-right')}</a></p>
         </footer>
       </div>
     </div>`;
@@ -86,8 +84,8 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
       </div>
       ${gone ? '' : `<button type="button" class="icon-button look-viewer__wish" data-wish="${esc(p.handle)}" aria-pressed="false" aria-label="Salva ${esc(p.title)} nei preferiti">${icon('heart')}</button>`}
       <div class="look-viewer__buy">
-        ${gone ? `<p class="look-viewer__sold">Non più disponibile</p><div class="look-viewer__actions">${view('Vedi i simili')}</div>` : `${sizes}
-        <p class="look-viewer__hint" data-lv-hint>${avail ? 'Scegli la taglia' : 'Scegli la taglia da farti avvisare'}</p>
+        ${gone ? `<p class="look-viewer__sold">Esaurito</p><div class="look-viewer__actions">${view('Vedi prodotto')}</div>` : `${sizes}
+        <p class="look-viewer__hint" data-lv-hint>Seleziona taglia</p>
         ${p.sizes.length > 1 ? `<p class="look-viewer__help"><button type="button" class="link-small" data-size-help="guide">${icon('ruler')} Guida taglie</button><button type="button" class="link-small product__size-help" data-size-help="advisor">${icon('hanger')}<span>Non sei sicuro della tua taglia?</span></button></p>` : ''}
         <div class="look-viewer__actions">
           <button type="button" class="button button--outline button--small look-viewer__add${avail ? '' : ' is-notify'}" data-piece-add data-added-label>${avail ? 'Aggiungi' : `${icon('bell')} Avvisami`}</button>
@@ -109,17 +107,11 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
     return { p, li, size: input ? input.value : null, buyable: p.sizes.some(s => s[1]) };
   });
   const current = () => looks[deck[at].id];
+  // the live viewer's button, "Aggiungi tutto al carrello" (no sums: owner, 02/10)
   function sync() {
-    const rows = chosen(), ready = rows.filter(r => r.size), buyable = rows.filter(r => r.buyable);
-    const sum = arr => arr.reduce((n, r) => n + r.p.price, 0);
-    const save = buyable.reduce((n, r) => n + Math.max(0, r.p.compareAt - r.p.price), 0);
-    $('[data-lv-total]', dialog).innerHTML = buyable.length ? `Totale look <strong>${SKS_FMT.money(sum(buyable))}</strong>${save ? ` <span class="look-viewer__save">risparmi ${SKS_FMT.money(save)}</span>` : ''}` : '';
     const btn = $('[data-lv-add]', dialog);
-    btn.hidden = !buyable.length;
-    btn.textContent = !ready.length ? 'Scegli le taglie per aggiungere'
-      : ready.length === buyable.length ? `Aggiungi ${ready.length === 1 ? 'il capo' : `i ${ready.length} capi`} al carrello · ${SKS_FMT.money(sum(ready))}`
-      : `Aggiungi ${ready.length === 1 ? 'il capo scelto' : `i ${ready.length} capi scelti`} · ${SKS_FMT.money(sum(ready))}`;
-    btn.setAttribute('aria-disabled', String(!ready.length));
+    btn.hidden = !chosen().some(r => r.buyable);
+    btn.textContent = 'Aggiungi tutto al carrello';
   }
   function render() {
     const l = current();
@@ -129,7 +121,7 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
     img.sizes = '(min-width: 760px) 46vw, 100vw';
     img.alt = l.caption || l.display;
     $('[data-lv-title]', dialog).textContent = l.display;
-    $('[data-lv-count]', dialog).textContent = deck.length > 1 ? `Look ${at + 1} di ${deck.length}` : 'Look';
+    $('[data-lv-count]', dialog).textContent = deck.length > 1 ? `${at + 1} / ${deck.length}` : '';
     $('[data-lv-pieces]', dialog).innerHTML = l.pieces.map(pieceRow).join('');
     $('[data-lv-page]', dialog).href = deck[at].href;
     $('[data-lv-status]', dialog).textContent = '';
@@ -152,7 +144,7 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
       if ('sold' in input.dataset) { popups().then(m => m.open('notify', one, input.value)); return; }
       await addWithFeedback(one, { handle: p.handle, title: p.title, brand: p.brand, price: p.price, compareAt: p.compareAt, image: p.image }, input.value, false);
       li.classList.add('is-added');
-      $('[data-lv-status]', dialog).innerHTML = `${esc(p.title)}, taglia ${esc(input.value)}: nel carrello. <button type="button" class="link-small" data-open-dialog="cart-drawer">Vai al carrello</button>`;
+      $('[data-lv-status]', dialog).textContent = 'Aggiunto ✓';
       setTimeout(() => syncPiece(li), 1900);
       return;
     }
@@ -168,8 +160,7 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = fa
     const [first, ...rest] = ready;
     for (const r of rest) Cart.add(info(r), r.size);
     await addWithFeedback(add, info(first), first.size, false);
-    const left = rows.filter(r => r.buyable && !r.size).length;
-    $('[data-lv-status]', dialog).innerHTML = `${ready.length === 1 ? 'Un capo aggiunto' : `${ready.length} capi aggiunti`} al carrello${left ? `, ${left === 1 ? 'uno' : left} senza taglia` : ''}. <button type="button" class="link-small" data-open-dialog="cart-drawer">Vai al carrello</button>`;
+    $('[data-lv-status]', dialog).textContent = 'Aggiunto ✓';
   }
   export async function openLook(link, { landed: arrived = false } = {}) {
     const scope = link.closest('section, .collection-page, main') || document;

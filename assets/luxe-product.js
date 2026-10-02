@@ -86,7 +86,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
       const first = form.querySelector('input[name="size"]');
       first && first.focus({ preventScroll: true });
       form.querySelector('.size-picker').scrollIntoView({ block: 'center', behavior: MOTION_OK() ? 'smooth' : 'auto' });
-      announce('Scegli una taglia per aggiungere al carrello.');
+      announce('Seleziona taglia');
     };
     form.addEventListener('submit', e => {
       e.preventDefault();
