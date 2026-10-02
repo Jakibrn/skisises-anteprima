@@ -139,8 +139,9 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   const shipLine = () => {
     if (!ship) return;
     const total = Cart.subtotal() + (Cart.lines.some(l => l.handle === P.handle) ? 0 : P.price);
-    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong>'
-      : `Spedizione gratuita in Italia per ordini superiori a €50: <strong>ti mancano ${SKS_FMT.money(50 - total)}</strong>`;
+    // the live strings (product.shipping.free_shipping / add_for_free_shipping, amount without trailing zeros)
+    const left = 50 - total, amount = Number.isInteger(left) ? `${left}€` : SKS_FMT.money(left);
+    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong>' : `Aggiungi <strong>${amount}</strong> per la spedizione gratuita`;
   };
   shipLine();
   document.addEventListener('cart:rendered', shipLine);
@@ -201,6 +202,17 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
 })();
 
 
+
+/* "Condividi" (the live share block): the phone's share sheet, else the four links */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-share-toggle]');
+  if (!b) return;
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    try { await navigator.share({ title: b.dataset.shareTitle, url: b.dataset.shareUrl }); return; } catch (err) { if (err.name === 'AbortError') return; }
+  }
+  const list = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
+  b.setAttribute('aria-expanded', String(open)); list.hidden = !open;
+});
 
 /* the size advisor itself is in size-help.js (89-size-help.js), loaded on the first click */
 

@@ -440,7 +440,7 @@ const Cart = {
     const key = info.handle + '|' + size;
     const found = lines.find(l => l.key === key);
     if (found) found.qty += qty;
-    else lines.unshift({ key, handle: info.handle, size, qty, title: info.title, brand: info.brand, price: info.price, compareAt: info.compareAt || 0, image: info.image });
+    else lines.unshift({ key, handle: info.handle, size, qty, title: info.title, brand: info.brand, price: info.price, compareAt: info.compareAt || 0, image: info.image, ...(info.meta ? { meta: info.meta } : {}) });
     this.save(lines);
     return key;
   },
@@ -481,7 +481,7 @@ function renderCart(newKey) {
       <div>
         <p class="cart-line__brand" translate="no">${SKS_FMT.esc(l.brand)}</p>
         <p class="cart-line__title"><a href="${productUrl(l.handle)}">${SKS_FMT.esc(l.title)}</a></p>
-        <p class="cart-line__meta">${SKS_FMT.esc(SKS_FMT.sizeLabel(l.size))}</p>
+        ${l.meta ? l.meta.map(m => `<p class="cart-line__meta">${SKS_FMT.esc(m)}</p>`).join('') : `<p class="cart-line__meta">${SKS_FMT.esc(SKS_FMT.sizeLabel(l.size))}</p>`}
         <div class="cart-line__actions">
           <div class="qty" role="group" aria-label="Quantità di ${SKS_FMT.esc(l.title)}">
             <button type="button" data-qty="-1" aria-label="Togli uno"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button>
@@ -528,7 +528,7 @@ async function addWithFeedback(button, info, size, openDrawer = true) {
   button.removeAttribute('aria-busy');
   const key = Cart.add(info, size);
   renderCart(key);
-  announce(`${info.title}, taglia ${size}, aggiunto al carrello. Totale ${SKS_FMT.money(Cart.subtotal())}.`);
+  announce(`${info.title}, ${info.meta ? info.meta[0] : `taglia ${size}`}, aggiunto al carrello. Totale ${SKS_FMT.money(Cart.subtotal())}.`);
   if (button.dataset.addedLabel !== undefined || button.classList.contains('button--primary')) {
     button.innerHTML = `<svg class="icon" aria-hidden="true"><use href="#i-check"/></svg> Aggiunto al carrello`;
     setTimeout(() => { button.innerHTML = label; }, 1800);
@@ -588,6 +588,14 @@ if ($('#product-json')) {
   document.addEventListener('click', e => { for (const [name, sel] of SIGNALS) if (e.target.closest?.(sel)) trackEvent(`product_intent:${name}`); }, true);
 }
 document.addEventListener('product-intent:size-test-completed', e => trackEvent('product_intent:size_test_completed', e.detail));
+// proposals (02/10, CRM): contact clicks and shares as actions (/apps/intent/action CONTACT_CLICKED, SHARE_CLICKED),
+// gated by the cookie choice in the theme; logged here with the "proposal:" prefix, they are not live events
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="tel:"], a[href*="wa.me/"], a[href^="mailto:"], a[href*="google.com/maps"]');
+  if (a && !a.closest('.share__list')) trackEvent('proposal:CONTACT_CLICKED', { channel: a.href.startsWith('tel:') ? 'phone' : a.href.includes('wa.me') ? 'whatsapp' : a.href.startsWith('mailto:') ? 'email' : 'map', page: location.pathname });
+  const sh = e.target.closest('[data-share-toggle], [data-reel-share], .share__list a');
+  if (sh) trackEvent('proposal:SHARE_CLICKED', { channel: sh.closest('.share__list') ? sh.textContent.trim().toLowerCase() : 'share', page: location.pathname });
+}, true);
 
 /* ---------- wishlist (stands in for the back-in-stock app's /apps/wishlist): a heart opens the app's modal
    (popups.js, loaded on the first heart; pointing at one starts the download) ---------- */

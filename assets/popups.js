@@ -97,6 +97,7 @@ function add(m, P, opener, src) {
       ${many ? `<fieldset class="wish-sizes"><legend class="wish-sizes__label">Taglia</legend><div class="wish-sizes__grid">${P.sizes.map(([l, a]) => `<label class="wish-size${a ? '' : ' is-sold'}"><input type="radio" name="wish-size" value="${esc(l)}"><span class="wish-size__label">${esc(l)}</span><span class="wish-size__sub">${a ? 'Disponibile' : `${icon('bell')} Avvisami`}</span></label>`).join('')}</div></fieldset>` : ''}
       <div class="wish-modal__email"><label class="field__label" for="wish-email">Email</label><input class="field__input" id="wish-email" type="email" autocomplete="email" inputmode="email"></div>
       <p class="wish-modal__note">Procedendo riceverai email relative alla wishlist e alla disponibilità stock. Puoi disiscriverti in qualsiasi momento.</p>
+      <label class="check wish-modal__marketing"><input type="checkbox" name="wish-marketing"><span>Accetto di ricevere comunicazioni marketing da Fabbrica Ski Sises.</span></label>
       <p class="field__error" data-wish-error hidden role="alert"></p>
       <button type="submit" class="button button--primary button--block" data-wish-submit>Aggiungi alla wishlist</button>
     </form>
@@ -123,7 +124,8 @@ function add(m, P, opener, src) {
     Wish.add(P, size, sold);
     store.set(WISH_EMAIL, email);
     // what the app's server records on this add (apps.wishlist.add.ts), shown here because nothing is sent
-    trackEvent('server:WISHLIST_ITEM_ADDED', { handle: P.handle, selectedSize: size, source: src, stockStatus: sold ? 'OUT_OF_STOCK' : 'IN_STOCK' });
+    // proposal (02/10, CRM): marketingConsent from the box, not always true (today a save makes the lead SUBSCRIBED)
+    trackEvent('server:WISHLIST_ITEM_ADDED', { handle: P.handle, selectedSize: size, source: src, stockStatus: sold ? 'OUT_OF_STOCK' : 'IN_STOCK', marketingConsent: !!form['wish-marketing']?.checked });
     if (sold) trackEvent('server:BACK_IN_STOCK_SUBSCRIBED', { handle: P.handle, selectedSize: size, source: 'wishlist' });
     done(m, P, size, already ? 'existing' : sold ? 'stock' : 'saved');
   });
@@ -417,21 +419,31 @@ function openNotify(opener, size) {
     <p>${T.lead}</p>
     <div><label class="field__label${T.placeholder ? ' visually-hidden' : ''}" for="notify-email">${T.label}</label>
       <input class="field__input" id="notify-email" type="email" autocomplete="email" inputmode="email"${T.placeholder ? ` placeholder="${T.placeholder}"` : ''} required></div>
+    ${page ? `<!-- proposal (02/10, CRM): the app's WhatsApp option (switched on in its settings, api.public.back-in-stock.settings)
+      and its own marketing box, unticked, apart from the notice -->
+    <div class="bis-modal__phone"><label class="field__label" for="notify-phone">Numero WhatsApp (facoltativo)</label>
+      <div class="bis-modal__phone-row"><select class="field__input" id="notify-country" aria-label="Paese">${['Italia +39', 'Germania +49', 'Spagna +34', 'Francia +33', 'Stati Uniti +1', 'Regno Unito +44'].map(c => `<option>${c}</option>`).join('')}</select>
+      <input class="field__input" id="notify-phone" type="tel" autocomplete="tel-national" inputmode="tel"></div></div>
+    <label class="check bis-modal__marketing"><input type="checkbox" name="notify-marketing"><span>Accetto di ricevere comunicazioni marketing da Fabbrica Ski Sises.</span></label>` : ''}
     <p class="field__error" data-bis-error hidden role="alert"></p>
-    ${page ? `<p class="bis-modal__note">${T.note}</p><button type="submit" class="button button--primary button--block" data-bis-send>${T.send}</button>`
+    ${page ? `<p class="bis-modal__note" data-bis-note>${T.note}</p><button type="submit" class="button button--primary button--block" data-bis-send>${T.send}</button>`
       : `<button type="submit" class="button button--primary button--block" data-bis-send>${T.send}</button><p class="bis-modal__note">${T.note}</p>`}
   </form>`;
   const form = $('[data-bis-form]', d), err = $('[data-bis-error]', d);
+  // with a WhatsApp number the app's notice says "via email e WhatsApp"
+  const phone = $('#notify-phone', d), note = $('[data-bis-note]', d);
+  phone?.addEventListener('input', () => { note.textContent = phone.value.trim() ? T.note.replace('via email', 'via email e WhatsApp') : T.note; });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const email = form['notify-email'].value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Inserisci un indirizzo email valido.'; err.hidden = false; form['notify-email'].focus(); return; }
+    if (phone && phone.value.trim() && !/^[\d\s]{6,15}$/.test(phone.value.trim())) { err.textContent = 'Inserisci un numero WhatsApp valido.'; err.hidden = false; phone.focus(); return; }
     err.hidden = true;
     const btn = $('[data-bis-send]', d);
     btn.setAttribute('aria-busy', 'true'); btn.textContent = T.sending;
     await new Promise(r => setTimeout(r, 450));
     // what the app's server records (api.public.back-in-stock.intents): the request, the product intent, the e-mail
-    trackEvent('request:back-in-stock/intents', { handle: P.handle, variant: size || null, source: src });
+    trackEvent('request:back-in-stock/intents', { handle: P.handle, variant: size || null, source: src, whatsapp: !!phone?.value.trim(), marketingConsent: !!form['notify-marketing']?.checked });
     trackEvent('server:BACK_IN_STOCK_SUBSCRIBED', { handle: P.handle, variant: size || null, source: 'back_in_stock_signup' });
     form.outerHTML = `<div class="modal__inner bis-modal__done">
       <span class="wish-modal__icon" aria-hidden="true">${icon('check')}</span>

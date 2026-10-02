@@ -1094,6 +1094,13 @@ html.reduce-motion .look-reel__media.is-burst .look-reel__burst { animation: ree
 .look-reel__sheet .look-viewer__foot { padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); }
 html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { transition-duration: .01ms; }
 
+/* the Gift Card in the menu (proposal, 02/10): the last item, with its little gift icon */
+.header__item--gift .header__link { display: inline-flex; align-items: center; gap: 6px; color: var(--green-700); }
+.header__item--gift .icon { width: 18px; height: 18px; }
+.header--transparent.is-over-hero .header__item--gift .header__link { color: inherit; }
+.drawer-nav__link--gift { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); color: var(--green-700); }
+.drawer-nav__gift { width: 48px; height: auto; mix-blend-mode: multiply; }
+
 /* ================= HOME ================= */
 /* hero: picture at full opacity from the first frame; height capped so the 2048x768 source is never upscaled at 1x */
 .hero { position: relative; display: grid; min-height: min(768px, 86svh); overflow: hidden; isolation: isolate; color: var(--snow); }
@@ -2173,6 +2180,120 @@ html:not(.reduce-motion) .size-nudge:not([hidden]) { animation: nudge-in var(--d
 /* a portrait cover (no 2:1 crop): the picture at its own shape, centred */
 .article-page__cover--portrait { display: grid; justify-items: center; }
 .article-page__cover--portrait img { width: min(560px, 100%); height: auto; }
+
+/* ---------- the Gift Card (02/10): its page, the recipient's page, the home band, the grid tile ---------- */
+.gift-card-page .breadcrumbs { margin-bottom: var(--s5); }
+.gift-card-page__grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(var(--s6), 5vw, var(--s9)); align-items: start; }
+/* the card's picture is a mock-up on white: shown on the paper-white ground, blended (multiply), never tilted */
+.gift-card-page__media { position: relative; margin: 0; display: grid; place-items: center; padding: clamp(var(--s5), 4vw, var(--s8)); background: var(--snow); }
+.gift-card-page__media img { width: 100%; max-width: 640px; height: auto; mix-blend-mode: multiply; }
+.gift-card-page__media .badge { position: absolute; top: var(--s4); left: var(--s4); }
+.gift-card-page__info { position: sticky; top: calc(var(--header-h) + var(--s5)); display: grid; gap: var(--s4); }
+.gift-card-page__price { font-size: 1.375rem; font-variant-numeric: tabular-nums; }
+.gift-card-form { display: grid; gap: var(--s4); }
+.gift-card-form__amounts { margin: 0; padding: 0; border: 0; display: grid; gap: var(--s2); }
+.gift-card-form__amounts legend { padding: 0; margin-bottom: var(--s2); font-size: var(--fs-sm); color: var(--ink-2); }
+.gift-card-form__chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+.gc-amount { position: relative; }
+.gc-amount input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.gc-amount span { display: grid; place-items: center; min-height: 52px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--snow); font-variant-numeric: tabular-nums; font-weight: 500; }
+.gc-amount input:checked + span { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.gc-amount input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .gc-amount:hover span { border-color: var(--ink); } }
+.gift-card-form__recipient { display: grid; gap: var(--s3); padding: var(--s4); background: var(--snow); border-radius: var(--radius); box-shadow: 0 0 0 1px var(--line); }
+.gift-card-form__recipient[hidden] { display: none; }
+.gift-card-form__recipient .field { display: grid; gap: var(--s1); margin: 0; }
+.gift-card-form .button--block { min-height: 56px; font-size: 1rem; }
+.gift-card-page__how { display: flex; gap: var(--s3); align-items: flex-start; font-size: var(--fs-sm); color: var(--ink-2); }
+.gift-card-page__how .icon { flex: none; color: var(--green-700); }
+.gift-card-page__desc { color: var(--ink-2); }
+@media (max-width: 1023px) { .gift-card-page__grid { grid-template-columns: 1fr; } .gift-card-page__info { position: static; } }
+
+.gift-issued__inner { display: grid; justify-items: center; gap: var(--s4); max-width: 640px; text-align: center; }
+.gift-issued__logo { width: 156px; height: auto; margin-bottom: var(--s3); }
+.gift-issued__card { position: relative; margin: var(--s3) 0; width: min(420px, 100%); }
+.gift-issued__card { background: var(--snow); }
+.gift-issued__card img { width: 100%; height: auto; mix-blend-mode: multiply; }
+.gift-issued__amount { position: absolute; right: 8%; bottom: 14%; padding: 4px 10px; border-radius: var(--radius); background: var(--ink); color: var(--stone); font-weight: 600; font-variant-numeric: tabular-nums; }
+.gift-issued__meta { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.gift-issued__code { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s2) var(--s4); padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+.gift-issued__code-label { width: 100%; font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
+.gift-issued__code-value { font-size: 1.25rem; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.gift-issued__qr { width: 160px; height: 160px; color: var(--ink); }
+.gift-issued__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
+@media print { .header, .footer, .announcement-bar, .prefooter, .wa-btn, .nl-pop, .preview-chip, .gift-issued__actions, .cookie-banner { display: none !important; } }
+
+.gift-band { background: var(--lichen); }
+.gift-band__grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(var(--s6), 6vw, var(--s10, 96px)); align-items: center; }
+.gift-band__media { margin: 0; padding: clamp(var(--s4), 3vw, var(--s7)); background: var(--snow); box-shadow: 0 1px 2px rgb(19 25 20 / 0.08), 0 22px 44px -26px rgb(19 25 20 / 0.45); }
+.gift-band__media img { width: 100%; height: auto; mix-blend-mode: multiply; transition: scale calc(var(--d-480) * var(--m) + .01ms) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .gift-band__media a:hover img { scale: 1.02; } }
+.gift-band__body { display: grid; gap: var(--s4); justify-items: start; max-width: 56ch; }
+.gift-band__title-link { text-decoration: none; }
+.gift-band__label { margin-top: var(--s2); font-size: var(--fs-sm); color: var(--ink-2); }
+.gift-band__amounts { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.gift-band__amounts .chip { font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) { .gift-band__grid { grid-template-columns: 1fr; } .gift-band__media { max-width: 420px; } }
+
+.grid-gift { display: grid; }
+.gift-tile { display: grid; grid-template-rows: auto 1fr; gap: var(--s3); text-decoration: none; height: 100%; }
+.gift-tile__media { display: grid; place-items: center; aspect-ratio: 4 / 5; padding: 6%; background: var(--snow); box-shadow: inset 0 0 0 1px var(--green-100); }
+.gift-tile__media img { width: 100%; height: auto; mix-blend-mode: multiply; transition: scale calc(var(--d-320) * var(--m) + .01ms) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .gift-tile:hover .gift-tile__media img { scale: 1.03; } }
+.gift-tile__body { display: grid; gap: 2px; align-content: start; }
+.gift-tile__title { font-size: var(--fs-sm); }
+.gift-tile__price { font-variant-numeric: tabular-nums; }
+.gift-tile__amounts { font-size: var(--fs-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* ---------- the live home's newsletter band and the Trustpilot TrustBox under it (02/10) ---------- */
+.newsletter-home__inner { display: grid; justify-items: center; gap: var(--s3); max-width: 720px; text-align: center; }
+.newsletter-home__eyebrow { font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--green-300); }
+.newsletter-home__form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); width: min(520px, 100%); margin-top: var(--s3); }
+.newsletter-home__form .field__input { min-height: 52px; background: var(--snow); border-color: transparent; color: var(--ink); }
+.newsletter-home__form .button { min-height: 52px; }
+.newsletter-home__consent { max-width: 56ch; font-size: var(--fs-xs); color: var(--on-dark-2); }
+.newsletter-home__consent a { color: inherit; }
+@media (max-width: 479px) { .newsletter-home__form { grid-template-columns: 1fr; } }
+.trustbox { display: flex; justify-content: center; padding: var(--s5) var(--gutter); border-bottom: 1px solid var(--line); }
+.trustbox__button { display: inline-flex; align-items: center; gap: var(--s3); min-height: 48px; padding: 0 var(--s5); border-radius: var(--radius); background: var(--snow); box-shadow: 0 0 0 1px var(--line); color: var(--ink); text-decoration: none; font-size: var(--fs-sm); font-weight: 500; }
+.trustbox__brand { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.trustbox__brand .icon { width: 16px; height: 16px; color: #00b67a; fill: currentColor; }
+@media (hover: hover) and (pointer: fine) { .trustbox__button:hover { box-shadow: 0 0 0 1px var(--ink); } }
+
+/* the product page's "Condividi" (live share block) */
+.share { margin-top: var(--s4); }
+.share__toggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: 40px; font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-2); }
+.share__toggle .icon { width: 16px; height: 16px; }
+.share__list { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: var(--s2) 0 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.share__list[hidden] { display: none; }
+
+/* the stand-in of Shopify's sign-in page (customer accounts) */
+.account-page--hosted .account-page__inner { max-width: 420px; text-align: left; }
+.account-page__logo { width: 156px; height: auto; margin: 0 auto var(--s6); display: block; }
+.account-page--hosted .account-form { display: grid; gap: var(--s4); margin-top: var(--s4); }
+.account-page__alt { margin-top: var(--s4); text-align: center; }
+.account-page__legal { margin-top: var(--s6); text-align: center; font-size: var(--fs-sm); }
+
+/* Shopify's express button (Shop Pay) and "Altre opzioni di pagamento", under "Aggiungi al carrello" as live */
+.product__express { display: grid; gap: var(--s1); margin-top: var(--s2); }
+.shop-pay { --bg: #5a31f4; --fg: #fff; --bd: #5a31f4; min-height: 48px; font-weight: 500; }
+.shop-pay:hover { --bg: #4a22e0; --bd: #4a22e0; }
+.shop-pay__mark { font-weight: 800; font-size: 1.125rem; letter-spacing: -0.02em; font-style: italic; }
+.product__express-more { justify-self: start; font-size: var(--fs-sm); text-decoration: underline; text-underline-offset: 3px; color: var(--ink-2); min-height: 32px; }
+
+/* CRM proposals (02/10): WhatsApp in the product page's back-in-stock popup, the separate marketing boxes */
+.bis-modal__phone { display: grid; gap: var(--s1); }
+.bis-modal__phone-row { display: grid; grid-template-columns: minmax(0, 8.5em) minmax(0, 1fr); gap: var(--s2); }
+.bis-modal__marketing, .wish-modal__marketing { font-size: var(--fs-sm); }
+.newsletter-home__form { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; }
+.newsletter-home__interests { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); margin: var(--s2) 0 0; padding: 0; border: 0; }
+.newsletter-home__interests legend { width: 100%; margin-bottom: var(--s2); font-size: var(--fs-xs); color: var(--on-dark-2); text-align: center; }
+.chip-check { position: relative; }
+.chip-check input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.chip-check span { display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--s4); border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line-on-dark); font-size: var(--fs-sm); color: var(--on-dark); }
+.chip-check input:checked + span { background: var(--on-dark); color: var(--forest-950); }
+.chip-check input:focus-visible + span { outline: 2px solid var(--green-300); outline-offset: 2px; }
+@media (max-width: 639px) { .newsletter-home__form { grid-template-columns: 1fr; } }
 
 /* ================= MOTION (CSS first) =================
    Tokens in tokens.css. --m is 0 under reduced motion: movement collapses, fades stay.

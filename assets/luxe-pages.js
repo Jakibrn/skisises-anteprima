@@ -416,6 +416,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     const rm = e.target.closest('[data-rq-remove]'); if (rm) { lines.splice(+rm.dataset.rqRemove, 1); compute(); return; }
     if (e.target.closest('[data-rq-send]')) {
       const d = el.querySelector('[data-rq-date]').value;
+      // proposal (02/10, CRM): the quote as an action (/apps/intent/action RENTAL_QUOTE_SENT), consent-gated in the theme
+      trackEvent('proposal:RENTAL_QUOTE_SENT', { lines: lines.length, pickupDate: d || null, page: location.pathname });
       toast(`Anteprima: sul sito si apre WhatsApp con il preventivo già scritto${d ? ' e la data di ritiro' : ''}. Nessun messaggio inviato.`);
     }
   });
@@ -448,3 +450,49 @@ $$('iframe[data-sks-map]').forEach(map => {
     map.focus();
   });
 });
+
+/* ---------- the gift card: its page (main-gift-card) and the recipient's page (gift-card-issued) ----------
+   The chosen amount sets the price; "Voglio inviarlo come regalo" opens Shopify's recipient form (in the theme:
+   the properties Recipient email / Recipient name / Message / Send on and __shopify_send_gift_card_to_recipient,
+   which the live form sends); ?taglio=100 and ?regalo=1 (the home band's links) open the page that way. The cart
+   line shows the amount and the recipient. */
+(() => {
+  const form = $('[data-gc-form]');
+  if (form) {
+    const G = JSON.parse(form.dataset.gc), price = $('[data-gc-price]'), gift = $('[data-gc-gift]', form), box = $('[data-gc-recipient]', form), err = $('[data-gc-error]', form);
+    const amount = () => +form.querySelector('[name="gc-amount"]:checked').value;
+    const params = new URLSearchParams(location.search);
+    const pre = form.querySelector(`[name="gc-amount"][value="${CSS.escape(params.get('taglio') || '')}"]`);
+    if (pre) pre.checked = true;
+    if (params.get('regalo') === '1') { gift.checked = true; box.hidden = false; }
+    const show = () => { price.textContent = SKS_FMT.money(amount()); };
+    show();
+    form.addEventListener('change', e => {
+      if (e.target.name === 'gc-amount') show();
+      if (e.target === gift) { box.hidden = !gift.checked; if (gift.checked) $('#gc-email', form).focus(); err.hidden = true; }
+    });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const v = amount(), meta = [`Taglio: ${v} €`];
+      if (gift.checked) {
+        const email = $('#gc-email', form).value.trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Inserisci un indirizzo email valido.'; err.hidden = false; $('#gc-email', form).focus(); return; }
+        const name = $('#gc-name', form).value.trim(), date = $('#gc-date', form).value;
+        meta.push(`Email destinatario: ${email}`);
+        if (name) meta.push(`Nome destinatario: ${name}`);
+        if (date) meta.push(`Spedisci il giorno: ${new Date(date + 'T12:00').toLocaleDateString('it-IT')}`);
+      }
+      err.hidden = true;
+      await addWithFeedback($('[data-gc-add]', form), { handle: G.handle, title: G.title, brand: G.brand, price: v, compareAt: 0, image: G.image, meta }, `${v} €${gift.checked ? ' · regalo' : ''}`);
+    });
+  }
+  // the recipient's page: copy the code, print
+  document.addEventListener('click', async e => {
+    if (e.target.closest('[data-gc-copy]')) {
+      const b = e.target.closest('[data-gc-copy]');
+      try { await navigator.clipboard.writeText($('[data-gc-code]').textContent.replace(/\s+/g, '')); } catch { /* the code stays on screen */ }
+      b.textContent = 'Copiato'; setTimeout(() => { b.textContent = 'Copia'; }, 1500);
+    }
+    if (e.target.closest('[data-gc-print]')) print();
+  });
+})();

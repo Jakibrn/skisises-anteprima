@@ -19,6 +19,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   // the looks woven in after each page of 8: the first is in the HTML, the next ones in a template
   const tpl = $('[data-grid-looks]', root);
   const looksPool = [...$$('.grid-look', grid).map(n => n.outerHTML), ...(tpl ? [...tpl.content.children].map(n => n.outerHTML) : [])];
+  // the Gift Card tile, sixth while no filter or sort is applied (main-collection.mjs)
+  const giftTile = $('.grid-gift', grid)?.outerHTML || '';
   const params = new URLSearchParams(location.search);
   const state = {
     brand: new Set(params.getAll('marca')), size: new Set(params.getAll('taglia')), color: new Set(params.getAll('colore')),
@@ -65,8 +67,12 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   // archived (no longer sold) items never lead a listing: stable partition after sorting
   const filtered = () => { const list = data.filter(p => matches(p)); const s = sorters[state.sort]; const sorted = s ? [...list].sort(s) : list; return [...sorted.filter(p => !p.archived), ...sorted.filter(p => p.archived)]; };
 
+  // only the facets' own keys are rewritten: utm_*, gclid, fbclid, gbraid, wbraid, sks_rec and any other parameter
+  // stay as they arrived (the Ads Pulse UTM report and the pixels read them from the page URL; CHANGES §11)
+  const OWN = ['marca', 'taglia', 'colore', 'tipo', 'genere', 'saldi', 'min', 'max', 'ordina', 'vista', 'page'];
   function syncUrl() {
-    const q = new URLSearchParams();
+    const q = new URLSearchParams(location.search);
+    OWN.forEach(k => q.delete(k));
     state.brand.forEach(v => q.append('marca', v)); state.size.forEach(v => q.append('taglia', v)); state.color.forEach(v => q.append('colore', v));
     if (state.type) q.set('tipo', state.type); if (state.gender) q.set('genere', state.gender); if (state.sale) q.set('saldi', '1');
     if (state.min) q.set('min', state.min); if (state.max) q.set('max', state.max);
@@ -109,6 +115,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     const looks = pristine();
     for (let i = from; i < to; i++) {
       html += SKS_CARD.render(list[i], { base: BASE });
+      if (looks && i === 4 && giftTile && list.length > 5) html += giftTile;
       const pageEnd = (i + 1) % perPage === 0, look = looksPool[(i + 1) / perPage - 1];
       if (looks && pageEnd && look && list.length > i + 1) html += look;
     }
