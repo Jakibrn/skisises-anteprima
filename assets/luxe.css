@@ -1049,6 +1049,13 @@ ul.type-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padd
 ul.type-tiles { display: flex; gap: var(--s3); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--s5); margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-snap-type: x proximity; }
 .type-tiles::-webkit-scrollbar { display: none; }
 .type-tiles > li { flex: none; scroll-snap-align: start; }
+/* the rows start on the page margin: the snap stops there (scroll-padding), never at the screen edge. From
+   768px they stay inside the margins on both sides (4px of room keeps the focus ring visible); phones swipe
+   them edge to edge */
+ul.type-chips, ul.type-tiles { scroll-padding-inline: var(--gutter); }
+@media (min-width: 768px) {
+  ul.type-chips, ul.type-tiles { margin-inline: -4px; padding-inline: 4px; scroll-padding-inline: 4px; }
+}
 .type-tile { display: grid; grid-template-columns: 44px auto; grid-template-rows: auto auto; column-gap: var(--s3); align-items: center; min-width: 168px; min-height: 68px; padding: var(--s3) var(--s4) var(--s3) var(--s3);
   background: var(--lichen); border: 1px solid transparent; border-radius: calc(var(--radius) * 2); text-align: left; transition: border-color var(--d-160) linear, background-color var(--d-160) linear; }
 .type-tile__icon { grid-row: 1 / span 2; width: 44px; height: 44px; object-fit: contain; mix-blend-mode: multiply; }
@@ -1831,6 +1838,10 @@ html:not(.reduce-motion) .size-nudge:not([hidden]) { animation: nudge-in var(--d
 .search-pages { display: grid; gap: var(--s3); max-width: 60ch; }
 .search-pages a { font-family: var(--font-display); font-size: var(--fs-d5); color: var(--ink); }
 .chip--ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+
+/* "Non sei sicuro della tua taglia?" with the live recommender's hanger (snippets/size-suggestions.liquid) */
+.product__size-help { display: inline-flex; align-items: center; gap: var(--s2); }
+.product__size-help .icon { width: 18px; height: 18px; }
 
 /* ================= MOTION (CSS first) =================
    Tokens in tokens.css. --m is 0 under reduced motion: movement collapses, fades stay.
