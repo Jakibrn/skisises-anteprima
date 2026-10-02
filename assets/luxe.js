@@ -1067,22 +1067,73 @@ document.addEventListener('click', e => {
   });
 })();
 
-/* ---------- cookie choice, then the -10% teaser ----------
-   In the theme the banner is Shopify's customer privacy banner (its choice goes to the Customer Privacy API)
-   and the teaser is Prestige's newsletter popup collapsed; here the choice stays on the device. */
+/* ---------- cookie choice, then the -10% newsletter popup ----------
+   In the theme the banner is Shopify's customer privacy banner (its choice goes to the Customer Privacy API).
+   The popup is sections/newsletter-popup.liquid with its live behaviour (owner, 02/10: "nasce aperto, poi si
+   riduce da solo e poi si riapre al click"), restyled: it opens 5 seconds into the visit (here 5 seconds after
+   the cookie choice, so the two never share the screen), shrinks after 20 seconds or at the first scroll of
+   16px, unless the shopper is using its form, and a tap opens it again (and arms the shrink again); its "–"
+   shrinks it, its x retires it for good. In the same tab the next pages show it already shrunk. Not on the
+   cart, checkout and account pages; it waits while a dialog is open. The live keys: localStorage
+   theme:popup-filled and nlp:dismissed-permanent, sessionStorage nlp:shown, nlp:collapsed, nlp:dismissed.
+   The sign-up goes to /apps/intent/newsletter-identify (CRM: NEWSLETTER_IDENTIFIED, source
+   newsletter_popup_welcome10); here it is logged, as the other events. */
 (() => {
-  const banner = $('[data-cookie-banner]'), teaser = $('[data-nl-teaser]');
+  const banner = $('[data-cookie-banner]'), pop = $('[data-nl-pop]');
   const consent = () => store.get('sks-consent', null);
-  function showTeaser() {
-    if (!teaser || store.get('sks-nl-dismissed', false)) return;
-    teaser.hidden = false;
+  const raw = area => ({
+    get: k => { try { return window[area].getItem(k); } catch { return null; } },
+    set: (k, v) => { try { window[area].setItem(k, v); } catch { /* storage blocked */ } },
+    del: k => { try { window[area].removeItem(k); } catch { /* storage blocked */ } }
+  });
+  const ls = raw('localStorage'), ss = raw('sessionStorage');
+  const DELAY = 5000, SHRINK = 20000;
+  let timer = 0, armedAt = 0, y0 = 0;
+
+  function setState(state, reason) {
+    pop.dataset.state = state;
+    $$('[data-nl-toggle]', pop).forEach(b => b.setAttribute('aria-expanded', String(state === 'open')));
+    const t = $('.nl-pop__toggle', pop);
+    t.setAttribute('aria-label', state === 'open' ? 'Riduci popup newsletter' : 'Apri popup newsletter');
+    if (state === 'collapsed') { ss.set('nlp:collapsed', '1'); pop.dataset.reason = reason || ''; disarm(); }
+    else ss.del('nlp:collapsed');
+  }
+  const onScroll = () => {
+    if (performance.now() - armedAt < 500) { y0 = scrollY; return; }
+    if (Math.abs(scrollY - y0) >= 16) setState('collapsed', 'scroll');
+  };
+  function arm() {
+    disarm();
+    if ('formActive' in pop.dataset) return;
+    armedAt = performance.now(); y0 = scrollY;
+    timer = setTimeout(() => setState('collapsed', 'timer'), SHRINK);
+    addEventListener('scroll', onScroll, { passive: true });
+  }
+  function disarm() { clearTimeout(timer); removeEventListener('scroll', onScroll); }
+  function show(state) {
+    pop.hidden = false;
+    ss.set('nlp:shown', '1');
+    setState(state);
+    if (state === 'open') arm();
+  }
+  function start() {
+    if (!pop || pop.hidden === false) return;
+    if (ls.get('theme:popup-filled') || ls.get('nlp:dismissed-permanent') || ss.get('nlp:dismissed')) return;
+    if (/^template-(cart|checkout|customers)/.test(document.body.className)) return;
+    // the next page of the same tab: already shrunk, at once
+    if (ss.get('nlp:shown') && ss.get('nlp:collapsed')) { show('collapsed'); return; }
+    const attempt = () => {
+      if (document.querySelector('dialog[open], .drawer[open]')) { setTimeout(attempt, DELAY); return; }
+      show('open');
+    };
+    setTimeout(attempt, DELAY);
   }
   function decide(value) {
     store.set('sks-consent', value);
     if (banner) banner.hidden = true;
     ROOT.classList.remove('has-cookie-banner');
     announce(value === 'all' ? 'Cookie accettati' : 'Scelta salvata: solo i cookie necessari e quelli che hai scelto');
-    setTimeout(showTeaser, 1200);
+    start();
   }
   if (banner && consent() == null) {
     banner.hidden = false;
@@ -1100,12 +1151,49 @@ document.addEventListener('click', e => {
       const f = e.target;
       decide({ analytics: f.analytics.checked, marketing: f.marketing.checked, preferences: f.preferences.checked });
     });
-  } else setTimeout(showTeaser, 1500);
-  if (teaser) teaser.addEventListener('click', e => {
-    if (e.target.closest('[data-nl-dismiss]')) { teaser.hidden = true; store.set('sks-nl-dismissed', true); }
+  } else start();
+
+  if (!pop) return;
+  // using the form stops the shrink for this page
+  const active = e => { if (e.target.closest('[data-nl-form]')) { pop.dataset.formActive = ''; disarm(); } };
+  pop.addEventListener('focusin', active);
+  pop.addEventListener('pointerdown', active);
+  pop.addEventListener('click', async e => {
+    if (e.target.closest('[data-nl-dismiss]')) {
+      pop.hidden = true; disarm();
+      ss.set('nlp:dismissed', '1'); ss.del('nlp:collapsed'); ls.set('nlp:dismissed-permanent', '1');
+      return;
+    }
+    // shrunk on desktop, the whole title bar opens it
+    const t = e.target.closest('[data-nl-toggle]') || (pop.dataset.state === 'collapsed' && e.target.closest('.nl-pop__head'));
+    if (t) {
+      if (pop.dataset.state === 'open') setState('collapsed', 'manual');
+      else { setState('open'); arm(); $('[data-nl-form] input', pop)?.focus({ preventScroll: true }); }
+      return;
+    }
+    const copy = e.target.closest('[data-nl-copy]');
+    if (copy) {
+      try { await navigator.clipboard.writeText('WELCOME10'); } catch { /* the code stays on screen */ }
+      copy.textContent = 'Copiato';
+      setTimeout(() => { copy.textContent = 'Copia codice'; }, 1500);
+    }
   });
-  // a completed sign-up retires the teaser
-  document.addEventListener('submit', e => { if (e.target.closest('[data-nl-form]') && e.target.checkValidity()) { store.set('sks-nl-dismissed', true); if (teaser) teaser.hidden = true; } }, true);
+  // the sign-up: the live popup shows its success at once ("Iscrizione completata", the code) and stays open
+  $('[data-nl-form]', pop).addEventListener('submit', e => {
+    e.preventDefault();
+    const form = e.target;
+    if (!form.reportValidity()) return;
+    trackEvent('request:apps/intent/newsletter-identify', { source: 'newsletter_popup_welcome10', marketingConsent: true });
+    trackEvent('server:NEWSLETTER_IDENTIFIED', { source: 'newsletter_popup_welcome10' });
+    ls.set('theme:popup-filled', 'true');
+    disarm();
+    $('[data-nl-title]', pop).textContent = 'Iscrizione completata';
+    $('[data-nl-start]', pop).hidden = true;
+    $('[data-nl-done]', pop).hidden = false;
+    $('[data-nl-copy]', pop).focus({ preventScroll: true });
+  });
+  // a sign-up from the footer retires the popup too
+  document.addEventListener('submit', e => { if (e.target.closest('.newsletter-form') && e.target.checkValidity()) { ls.set('theme:popup-filled', 'true'); pop.hidden = true; disarm(); } }, true);
 })();
 
 /* ---------- design comments (prototype only, never ported to the theme) ----------

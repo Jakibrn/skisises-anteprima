@@ -181,7 +181,9 @@ main > :is(section, article).section:first-of-type { padding-top: var(--s7); }
 .scheme-lichen { background: var(--lichen); color: var(--ink); }
 .scheme-forest { background: var(--forest-950); color: var(--on-dark); }
 .scheme-forest .muted, .scheme-forest .lead { color: var(--on-dark-2); }
-.scheme-forest a:hover { color: var(--green-300); }
+/* text links only: a button keeps its own colours in a band or in rich text (02/10: the light green on light green
+   of every a.button on forest under the pointer) */
+.scheme-forest a:not(.button):hover { color: var(--green-300); }
 
 /* icons: 1.5px stroke, as the theme setting */
 .icon { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
@@ -200,7 +202,7 @@ main > :is(section, article).section:first-of-type { padding-top: var(--s7); }
 .button:active { transform: scale(0.98); }
 .button--primary { --bg: var(--green-800); --fg: var(--stone); --bd: var(--green-800); }
 .button--primary:hover { --bg: color-mix(in srgb, var(--green-800) 86%, var(--ink)); }
-.button--outline:hover { --bg: var(--ink); --fg: var(--stone); }
+.button--outline:hover, .button--secondary:hover { --bg: var(--ink); --fg: var(--stone); }
 .button--on-dark { --bg: var(--on-dark); --fg: var(--forest-950); --bd: var(--on-dark); }
 .button--on-dark:hover { --bg: var(--green-300); --bd: var(--green-300); }
 .button--on-image { --bg: color-mix(in srgb, var(--snow) 92%, transparent); --fg: var(--ink); --bd: transparent; }
@@ -293,11 +295,16 @@ textarea { padding: var(--s3) var(--s4); min-height: 88px; resize: vertical; }
 .rte h3 { font-family: var(--font-text); font-size: 1.125rem; font-weight: 600; letter-spacing: 0; margin-top: 1.6em; }
 .rte ul, .rte ol { padding-left: 1.2em; }
 .rte li + li { margin-top: 0.4em; }
-.rte a { color: var(--green-700); }
+.rte a:not(.button) { color: var(--green-700); }
 .rte img { margin-block: var(--s6); width: 100%; }
 .rte blockquote { font-family: var(--font-display); font-size: var(--fs-d4); line-height: 1.3; padding-left: var(--s5); border-left: 1px solid var(--green-500); }
 .rte table { width: 100%; font-size: var(--fs-sm); }
 .rte th, .rte td { text-align: left; padding: var(--s3) var(--s2); border-bottom: 1px solid var(--line); vertical-align: top; }
+/* a table always fits the text column (BlogSEO's four-column comparisons overflowed phones by up to 68px):
+   fixed layout, words wrap inside their cell, smaller type on phones */
+.rte table { table-layout: fixed; }
+.rte th, .rte td { overflow-wrap: anywhere; hyphens: auto; }
+@media (max-width: 639px) { .rte table { font-size: var(--fs-xs); } .rte th, .rte td { padding: var(--s2) 6px; } }
 
 /* ---------- announcement bar ---------- */
 .announcement-bar { background: var(--forest-950); color: var(--on-dark); text-align: center; font-size: var(--fs-sm); padding: 9px var(--gutter); letter-spacing: 0.01em; }
@@ -850,23 +857,62 @@ html:not(.reduce-motion) .header__bag .count-badge.is-bump { animation: cart-bum
 .wa-btn__logo { width: 52px; height: 52px; padding: 12px; border-radius: 50%; background: #25D366; color: #fff; box-shadow: 0 0 0 3px var(--snow), 0 10px 24px -12px rgb(19 25 20 / .7); flex: none; }
 .wa-btn__label { padding: 6px 10px; border-radius: var(--radius); background: var(--snow); font-size: var(--fs-sm); box-shadow: 0 0 0 1px var(--line); }
 .wa-btn:hover .wa-btn__logo { transform: scale(1.04); }
-.nl-teaser { position: fixed; right: var(--s5); bottom: calc(var(--s5) + env(safe-area-inset-bottom)); z-index: var(--z-chip);
-  display: flex; align-items: stretch; background: var(--green-800); color: var(--stone); border-radius: var(--radius); box-shadow: 0 14px 32px -18px rgb(11 23 14 / .8);
-  animation: rise calc(var(--d-480) * var(--m) + .01ms) var(--ease-out) both; }
-.nl-teaser[hidden] { display: none; }
-.nl-teaser__open { display: inline-flex; align-items: center; gap: var(--s3); min-height: 52px; padding: 0 var(--s4) 0 var(--s5); font-size: var(--fs-sm); letter-spacing: .02em; }
-.nl-teaser__open strong { color: var(--green-300); font-weight: 700; }
-.nl-teaser__short { display: none; }
-.nl-teaser__open .icon { width: 16px; height: 16px; transform: rotate(180deg); }
-.nl-teaser__close { display: grid; place-items: center; width: 48px; border-left: 1px solid color-mix(in srgb, var(--stone) 20%, transparent); }
-.nl-teaser__close .icon { width: 16px; height: 16px; }
-.nl-dialog .modal__inner { position: relative; }
-.nl-dialog__close { position: absolute; top: var(--s2); right: var(--s2); }
-.nl-dialog h2 { padding-right: 40px; }
+/* the "-10%" newsletter popup (sections/newsletter-popup.liquid restyled in the brand green, live behaviour):
+   open, it is a card at the bottom right (phones: across the bottom); shrunk, the title bar on desktop and a round
+   "-10%" bubble level with WhatsApp on phones. The container has no box: only its card or bubble take taps */
+.nl-pop { position: fixed; inset: auto 0 calc(0px + env(safe-area-inset-bottom)) 0; height: 0; z-index: var(--z-chip); pointer-events: none; }
+.nl-pop[hidden] { display: none; }
+.nl-pop__card { position: absolute; right: var(--s6); bottom: var(--s6); width: min(380px, calc(100% - 2 * var(--s4))); pointer-events: auto;
+  background: var(--green-800); color: var(--stone); border-radius: calc(var(--radius) * 2); box-shadow: 0 18px 40px -20px rgb(11 23 14 / .85);
+  animation: rise calc(var(--d-480) * var(--m) + .01ms) var(--ease-out) backwards;
+  transition: opacity var(--d-240) var(--ease-out), transform var(--d-320) var(--ease-out), visibility 0s; }
+.nl-pop__head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px; padding: var(--s3) var(--s2) var(--s3) var(--s5); }
+.nl-pop__title { font-family: var(--font-display); font-size: var(--fs-d5); line-height: 1.2; color: var(--snow); }
+.nl-pop__head .icon-button { color: var(--stone); }
+.nl-pop__head .icon-button:focus-visible { outline-color: var(--green-300); }
+.nl-pop__toggle .icon + .icon { display: none; rotate: 180deg; }
+.nl-pop[data-state="collapsed"] .nl-pop__toggle .icon:first-child { display: none; }
+.nl-pop[data-state="collapsed"] .nl-pop__toggle .icon + .icon { display: block; }
+.nl-pop[data-state="collapsed"] .nl-pop__head { cursor: pointer; }
+/* the body folds away (grid rows 1fr → 0fr), the title bar stays */
+.nl-pop__body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows calc(var(--d-320) * var(--m) + .01ms) var(--ease-out); }
+.nl-pop__body > * { min-height: 0; overflow: hidden; padding: 0 var(--s5); }
+.nl-pop__body > :not([hidden]) { padding-bottom: var(--s5); }
+.nl-pop[data-state="collapsed"] .nl-pop__body { grid-template-rows: 0fr; }
+.nl-pop[data-state="collapsed"] .nl-pop__body > * { padding-bottom: 0; visibility: hidden; transition: visibility 0s var(--d-320); }
+.nl-pop__text { font-size: var(--fs-sm); line-height: 1.5; color: color-mix(in srgb, var(--stone) 88%, transparent); margin-bottom: var(--s4); }
+.nl-pop__form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); }
+.nl-pop__form .field__input { min-height: 48px; background: var(--snow); border-color: transparent; color: var(--ink); }
+.nl-pop__form .button { --bg: var(--on-dark); --fg: var(--forest-950); --bd: var(--on-dark); }
+.nl-pop__form .button:hover { --bg: var(--green-300); --bd: var(--green-300); }
+.nl-pop__privacy { margin-top: var(--s3); font-size: var(--fs-xs); }
+.nl-pop__privacy a { color: inherit; }
+.nl-pop__done p { font-size: var(--fs-sm); line-height: 1.5; }
+.nl-pop__code-label { margin-top: var(--s4); font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: color-mix(in srgb, var(--stone) 80%, transparent); }
+.nl-pop__code { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: var(--s2) 0 var(--s3); padding: var(--s2) var(--s2) var(--s2) var(--s4); border: 1px dashed color-mix(in srgb, var(--stone) 60%, transparent); border-radius: var(--radius); }
+.nl-pop__code span { font-weight: 700; letter-spacing: .06em; font-variant-numeric: tabular-nums; }
+.nl-pop__code .button { --fg: var(--stone); --bd: color-mix(in srgb, var(--stone) 70%, transparent); }
+.nl-pop__code .button:hover { --bg: var(--stone); --fg: var(--ink); }
+.nl-pop__done .meta { color: color-mix(in srgb, var(--stone) 75%, transparent); }
+.nl-pop__bubble { display: none; }
+/* phones: across the bottom when open; shrunk, a 56px bubble whose centre is level with WhatsApp's (48px at 12px) */
+@media (max-width: 699px) {
+  .nl-pop__card { left: var(--s3); right: var(--s3); bottom: var(--s3); width: auto; }
+  .nl-pop__bubble { display: grid; place-items: center; position: absolute; right: var(--s3); bottom: 8px; width: 56px; height: 56px; border-radius: 50%; pointer-events: auto;
+    background: var(--green-800); color: var(--snow); font-weight: 700; font-size: 1rem; letter-spacing: .01em; box-shadow: 0 0 0 3px var(--snow), 0 10px 24px -12px rgb(19 25 20 / .7);
+    transition: opacity var(--d-240) var(--ease-out), transform var(--d-320) var(--ease-out), visibility 0s; }
+  .nl-pop__bubble:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .nl-pop[data-state="open"] .nl-pop__bubble { opacity: 0; transform: scale(.6); visibility: hidden; pointer-events: none; transition-delay: 0s, 0s, var(--d-320); }
+  .nl-pop[data-state="collapsed"] .nl-pop__card { opacity: 0; transform: translateY(16px) scale(.98); visibility: hidden; pointer-events: none; transition-delay: 0s, 0s, var(--d-320); }
+  .nl-pop[data-state="collapsed"] .nl-pop__body { transition: none; }
+}
+/* reduced motion: the card and the bubble only fade */
+html.reduce-motion .nl-pop :is(.nl-pop__card, .nl-pop__bubble) { transform: none; }
 /* the preview chip sits above WhatsApp on the left */
 .preview-chip { bottom: calc(var(--s5) + 64px + env(safe-area-inset-bottom)); }
 body:has(.sticky-atc.is-visible) .preview-chip { bottom: calc(var(--sticky-h, 84px) + 64px + env(safe-area-inset-bottom)); }
-body:has(.sticky-atc.is-visible) :is(.wa-btn, .nl-teaser) { bottom: calc(var(--sticky-h, 84px) + env(safe-area-inset-bottom)); }
+body:has(.sticky-atc.is-visible) .wa-btn { bottom: calc(var(--sticky-h, 84px) + env(safe-area-inset-bottom)); }
+body:has(.sticky-atc.is-visible) .nl-pop { bottom: calc(var(--sticky-h, 84px) - var(--s3) + env(safe-area-inset-bottom)); }
 .cookie-banner { position: fixed; left: 50%; bottom: calc(var(--s5) + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: var(--z-dialog);
   width: min(520px, calc(100% - 2 * var(--s4))); padding: var(--s6) var(--s6) var(--s4); background: var(--snow); color: var(--ink);
   border-radius: calc(var(--radius) * 2); box-shadow: 0 0 0 1px var(--line), 0 24px 60px -24px rgb(11 23 14 / .55); animation: cookie-in calc(var(--d-480) * var(--m) + .01ms) var(--ease-out) both; }
@@ -881,16 +927,11 @@ body:has(.sticky-atc.is-visible) :is(.wa-btn, .nl-teaser) { bottom: calc(var(--s
 .cookie-banner__more button { min-height: 32px; padding: 0 var(--s1); color: var(--ink-3); text-decoration: underline; text-underline-offset: 2px; }
 .cookie-banner__prefs { display: grid; gap: var(--s3); }
 .cookie-banner__prefs .check { font-size: var(--fs-sm); }
-html.has-cookie-banner :is(.wa-btn, .comment-fab) { visibility: hidden; }
+html.has-cookie-banner :is(.wa-btn, .comment-fab, .nl-pop) { visibility: hidden; }
 @media (max-width: 767px) {
   .wa-btn { left: var(--s3); bottom: calc(var(--s3) + env(safe-area-inset-bottom)); }
   .wa-btn__label { display: none; }
   .wa-btn__logo { width: 48px; height: 48px; padding: 11px; }
-  .nl-teaser { right: var(--s3); bottom: calc(var(--s3) + env(safe-area-inset-bottom)); }
-  .nl-teaser__open { min-height: 48px; padding: 0 var(--s3) 0 var(--s4); }
-  .nl-teaser__long { display: none; }
-  .nl-teaser__short { display: inline; }
-  .nl-teaser__close { width: 40px; }
   .cookie-banner { left: 0; right: 0; bottom: 0; transform: none; width: auto; border-radius: calc(var(--radius) * 3) calc(var(--radius) * 3) 0 0; padding: var(--s5) var(--s5) calc(var(--s3) + env(safe-area-inset-bottom)); }
   /* product page: WhatsApp only with the sticky add-to-cart bar, above it (it hid the price: journey P1) */
   .template-product .wa-btn { display: none; }
@@ -933,8 +974,12 @@ html.has-cookie-banner :is(.wa-btn, .comment-fab) { visibility: hidden; }
 .look-viewer__sizes .size-chip input { position: absolute; inset: 0; opacity: 0; cursor: inherit; }
 .look-viewer__sizes .size-chip:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
 .look-viewer__sizes .size-chip:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
-.look-viewer__sizes .size-chip.is-sold { color: var(--ink-3); text-decoration: line-through; background: var(--stone); }
-.look-viewer__sizes .size-chip.is-sold:has(input:checked) { color: var(--ink); font-weight: 400; }
+/* a sold-out size is a button with the bell (as on the product page): a tap opens the back-in-stock popup */
+.look-viewer__sizes .size-chip.is-sold { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); background: transparent; border-style: dashed; font: inherit; font-size: var(--fs-sm); }
+.look-viewer__sizes .size-chip.is-sold > span { text-decoration: line-through; }
+.look-viewer__sizes .size-chip.is-sold .icon { width: 12px; height: 12px; }
+@media (hover: hover) and (pointer: fine) { .look-viewer__sizes .size-chip.is-sold:hover { border-color: var(--ink); color: var(--ink); } }
+.look-viewer__sizes .size-chip.is-sold:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .look-viewer__sizes .size-chip.is-single { border-style: dashed; }
 .look-viewer__help { display: flex; flex-wrap: wrap; gap: 0 var(--s4); margin-top: var(--s1); }
 .look-viewer__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin-top: var(--s2); }
@@ -967,6 +1012,87 @@ html.has-cookie-banner :is(.wa-btn, .comment-fab) { visibility: hidden; }
   .look-viewer__head { padding-right: calc(var(--s5) + 48px); }
   .look-viewer__close { position: fixed; top: var(--s3); right: var(--s3); z-index: 2; background: color-mix(in srgb, var(--snow) 90%, transparent); }
 }
+
+/* ---------- phones: the looks as a vertical reel (the live native-imm.js idea, owner 02/10). One look per screen,
+   full-bleed photo, native scroll-snap moves one look per swipe; the pieces open in a sheet from the bottom ---------- */
+.look-reel { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--forest-950); color: var(--on-dark); overflow: hidden; }
+.look-reel::backdrop { background: var(--forest-950); }
+.look-reel { opacity: 0; transition: opacity var(--d-320) var(--ease-out), display var(--d-320) allow-discrete, overlay var(--d-320) allow-discrete; }
+.look-reel[open] { opacity: 1; }
+@starting-style { .look-reel[open] { opacity: 0; } }
+.look-reel:not([open]) { display: none; }
+.look-reel__track { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.look-reel__track::-webkit-scrollbar { display: none; }
+.look-reel__slide { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; overflow: hidden; scroll-snap-align: start; scroll-snap-stop: always; background: var(--forest-950); }
+/* the photo ends on the panel and keeps its bottom (the shoes), as live; when the space left would crop more
+   than about a tenth of it (short screens), the whole photo shows on the dark ground instead */
+.look-reel__media { position: relative; min-height: 0; overflow: hidden; container-type: size; }
+.look-reel__photo { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%; }
+@container (min-aspect-ratio: 13 / 20) { .look-reel__photo { object-fit: contain; } }
+.look-reel__media::before, .look-reel__media::after { content: ""; position: absolute; inset-inline: 0; pointer-events: none; z-index: 1; }
+.look-reel__media::before { top: 0; height: 120px; background: linear-gradient(rgb(6 12 8 / .5), transparent); }
+.look-reel__media::after { bottom: 0; height: 40px; background: linear-gradient(transparent, var(--forest-950)); }
+/* the photo settles as it arrives (the hero's 1.04 to 1), only the look in view */
+html:not(.reduce-motion) .look-reel__slide.is-current .look-reel__photo { animation: reel-settle var(--d-800) var(--ease-out) both; }
+@keyframes reel-settle { from { scale: 1.04; } }
+/* a double tap saves the look: the heart rises over the photo */
+.look-reel__burst { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; opacity: 0; color: var(--snow); }
+.look-reel__burst .icon { width: 96px; height: 96px; fill: currentColor; stroke: none; filter: drop-shadow(0 4px 16px rgb(0 0 0 / .35)); }
+.look-reel__media.is-burst .look-reel__burst { animation: reel-burst var(--d-800) var(--ease-out); }
+@keyframes reel-burst { 0% { opacity: 0; scale: .6; } 25% { opacity: 1; scale: 1.08; } 60% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
+html.reduce-motion .look-reel__media.is-burst .look-reel__burst { animation: reel-burst-still var(--d-800) linear; }
+@keyframes reel-burst-still { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.look-reel__info { display: grid; gap: var(--s3); padding: var(--s2) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); background: var(--forest-950); }
+.look-reel__head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px; margin-right: calc(-1 * var(--s2)); }
+.look-reel__title { font-family: var(--font-display); font-size: 1.375rem; line-height: 1.15; letter-spacing: -0.01em; color: var(--snow); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-wrap: balance; }
+.look-reel__icon { color: var(--snow); }
+.look-reel__icon[aria-pressed="true"] .icon { fill: currentColor; }
+.look-reel__icon:focus-visible { outline-color: var(--green-300); }
+/* every piece in sight, no sideways scrolling (owner, 02/10: no popup scrolls sideways): up to 64px each, narrower
+   when a look has many pieces on a small phone */
+.look-reel .look-reel__strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 64px); gap: var(--s2); margin: 0; padding: 2px 0; list-style: none; }
+.look-reel__piece { display: grid; gap: 4px; width: 100%; padding: 0; border: 0; background: none; color: var(--on-dark); text-align: left; font-variant-numeric: tabular-nums; }
+.look-reel__piece-img { display: block; aspect-ratio: 4 / 5; border-radius: var(--radius); overflow: hidden; background: var(--lichen); }
+.look-reel__piece-img img { width: 100%; height: 100%; object-fit: contain; padding: 8%; mix-blend-mode: multiply; }
+.look-reel__piece.is-out .look-reel__piece-img img { opacity: .5; }
+.look-reel__piece-price { font-size: 0.6875rem; line-height: 1.2; letter-spacing: -0.01em; white-space: nowrap; }
+.look-reel__piece:focus-visible { outline: 2px solid var(--green-300); outline-offset: 2px; }
+.look-reel__shop { width: 100%; min-height: 48px; }
+.look-reel__top { position: absolute; inset: 0 0 auto; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: calc(var(--s3) + env(safe-area-inset-top)) var(--s3) 0 var(--s4); pointer-events: none; }
+.look-reel__top > * { pointer-events: auto; }
+.look-reel__logo { position: absolute; left: 50%; translate: -50% 0; top: calc(var(--s3) + env(safe-area-inset-top) + 10px); display: block; line-height: 0; }
+.look-reel__logo img { width: 117px; height: auto; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .35)); }
+.look-reel__count { margin: 0; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; color: var(--snow); text-shadow: 0 1px 2px rgb(0 0 0 / .4); }
+.look-reel__close { color: var(--snow); background: rgb(6 12 8 / .32); border-radius: 50%; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+/* where the shopper is: one dash per look down the right edge, the current one long and white */
+.look-reel__progress { position: absolute; z-index: 2; right: 6px; top: 50%; translate: 0 -50%; display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; pointer-events: none; filter: drop-shadow(0 0 2px rgb(0 0 0 / .45)); }
+.look-reel__progress li { width: 3px; height: 10px; border-radius: 2px; background: rgb(255 255 255 / .38); transition: height var(--d-240) var(--ease-out), background-color var(--d-240) var(--ease-out); }
+.look-reel__progress li.is-current { height: 22px; background: var(--snow); }
+/* the last screen: where the reel goes on */
+.look-reel__end { display: grid; grid-template-rows: none; place-content: center; gap: var(--s5); padding: var(--s6); text-align: center; background: var(--forest-950); }
+.look-reel__end .d3 { color: var(--snow); }
+.look-reel__end::before, .look-reel__end::after { content: none; }
+.look-reel.is-end :is(.look-reel__count, .look-reel__progress) { opacity: 0; }
+/* the pieces: a sheet from the bottom over the photo, which stays visible above it */
+.look-reel__scrim { position: absolute; inset: 0; z-index: 3; background: rgb(6 12 8 / .45); opacity: 0; transition: opacity var(--d-320) var(--ease-out); }
+.look-reel.is-sheet .look-reel__scrim { opacity: 1; }
+.look-reel__scrim[hidden] { display: block; visibility: hidden; }
+.look-reel__sheet { position: absolute; inset: auto 0 0; z-index: 4; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; max-height: 86%; background: var(--stone); color: var(--ink); border-radius: 16px 16px 0 0;
+  translate: 0 100%; transition: translate var(--d-480) var(--ease-drawer), visibility 0s var(--d-480); visibility: hidden; box-shadow: 0 -12px 40px rgb(6 12 8 / .35); }
+.look-reel.is-sheet .look-reel__sheet { translate: 0 0; visibility: visible; transition: translate var(--d-480) var(--ease-drawer), visibility 0s; }
+.look-reel__sheet.is-dragging { transition: none; }
+.look-reel__grab { display: grid; place-items: center; height: 24px; touch-action: none; cursor: grab; }
+.look-reel__grab::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: var(--line-strong); }
+.look-reel__sheet .look-viewer__head { padding: 0 calc(var(--s4) + 44px) var(--s3) var(--s4); touch-action: none; } /* pulled down by its title too */
+.look-reel__sheet .look-viewer__count { display: none; } /* the reel's own count stays in sight above */
+.look-reel__sheet-close { position: absolute; top: 18px; right: var(--s2); }
+.look-reel__sheet .look-viewer__pieces { overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0 var(--s4); list-style: none; }
+.look-reel__sheet .look-viewer__piece { grid-template-columns: 72px minmax(0, 1fr) auto; }
+.look-reel__sheet .look-viewer__thumb { grid-row: 1; }
+.look-reel__sheet .look-viewer__thumb img { width: 72px; height: 90px; }
+.look-reel__sheet .look-viewer__buy { grid-column: 1 / -1; }
+.look-reel__sheet .look-viewer__foot { padding: var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom)); }
+html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { transition-duration: .01ms; }
 
 /* ================= HOME ================= */
 /* hero: picture at full opacity from the first frame; height capped so the 2048x768 source is never upscaled at 1x */
@@ -1009,7 +1135,7 @@ html.has-cookie-banner :is(.wa-btn, .comment-fab) { visibility: hidden; }
 
 /* looks rail: sticky + scroll-linked travel on desktop; native scroll-snap elsewhere */
 .looks-rail { padding-block: var(--section); }
-.looks-rail__head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--s5) var(--s7); margin-bottom: var(--s7); }
+.looks-rail__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--s5) var(--s7); margin-bottom: var(--s7); }
 .looks-rail__head .lead { max-width: 48ch; }
 .looks-rail__viewport { overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: max(var(--gutter), calc((100vw - var(--container)) / 2)); scrollbar-width: none; overscroll-behavior-x: contain; }
 .looks-rail__viewport::-webkit-scrollbar { display: none; }
@@ -1451,7 +1577,12 @@ dialog th, dialog td { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 1023px) { .lookbook__grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 639px) { .lookbook__grid { grid-template-columns: 1fr; } .lookbook__item.is-wide { grid-column: auto; } .lookbook__item.is-wide .look-card__media { aspect-ratio: 4 / 5; } }
 .look-page .breadcrumbs { margin-bottom: var(--s5); }
-.look-page__grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: clamp(var(--s6), 5vw, var(--s9)); align-items: start; }
+/* desktop: the photos and, under them, the description; the pieces beside both (owner, 02/10). Phones: photos,
+   pieces, description */
+.look-page__grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); grid-template-rows: auto 1fr; grid-template-areas: "media info" "lead info"; gap: var(--s6) clamp(var(--s6), 5vw, var(--s9)); align-items: start; }
+.look-page__media { grid-area: media; }
+.look-page__info { grid-area: info; }
+.look-page__lead { grid-area: lead; }
 .look-page__media { display: grid; grid-template-columns: 2fr 1fr; gap: var(--s3); align-items: start; }
 .look-page__photo { background: var(--lichen); }
 .look-page__photo img { width: 100%; height: auto; }
@@ -1481,9 +1612,13 @@ dialog th, dialog td { white-space: normal; overflow-wrap: anywhere; }
 .look-size > span:not(.visually-hidden) { display: inline-grid; place-items: center; min-width: 44px; min-height: 40px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); font-size: var(--fs-sm); cursor: pointer; background: var(--snow); }
 .look-size input:checked + span { background: var(--ink); color: var(--stone); border-color: var(--ink); }
 .look-size input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
-.look-size.is-sold > span:not(.visually-hidden) { color: var(--ink-3); text-decoration: line-through; background: transparent; }
-/* a sold-out size can be picked, to be told when it is back: picked, it keeps its strike and gets the ink ring */
-.look-size.is-sold input:checked + span { background: var(--snow); color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* a sold-out size is a button with the bell (as on the product page): a tap opens the back-in-stock popup */
+button.look-size { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.look-size.is-sold > span:not(.visually-hidden) { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); background: transparent; border-style: dashed; text-decoration: line-through; }
+.look-size.is-sold > span > .icon { width: 12px; height: 12px; }
+@media (hover: hover) and (pointer: fine) { button.look-size.is-sold:hover > span { border-color: var(--ink); color: var(--ink); } }
+button.look-size:focus-visible { outline: none; }
+button.look-size:focus-visible > span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .look-size.is-single > span:not(.visually-hidden) { border-style: dashed; }
 .look-piece.is-added .look-piece__title::after { content: 'Nel carrello'; display: inline-block; margin-left: 8px; padding: 1px 6px; font-size: 11px; font-weight: 600; background: var(--green-100); color: var(--green-800); }
 .look-piece.is-unavailable .look-piece__media img { opacity: 0.5; }
@@ -1509,30 +1644,28 @@ dialog th, dialog td { white-space: normal; overflow-wrap: anywhere; }
 .brands-page__eyebrow { margin-bottom: var(--s2); font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
 .look-page__more { margin-top: var(--section); }
 .look-page__more-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s6); }
-/* "Altri look", proposal B: polaroids. A white frame with the deeper bottom edge for the caption, a slight tilt
-   that straightens under the pointer, a soft shadow (no border). Same markup and image crops as proposal A. */
-.look-page__more.is-polaroid .looks-rail__track { gap: var(--s6); padding-block: var(--s4) var(--s8); align-items: start; }
-.is-polaroid .look-card { width: clamp(220px, 21vw, 288px); padding: 12px 12px 20px; background: var(--snow);
+/* every looks slider (the home's Daily Inspiration, "Altri look"): polaroids, the owner's pick (02/10, proposal B).
+   A white frame with the deeper bottom edge for the caption, a slight tilt that straightens under the pointer,
+   a soft shadow (no border). Same markup and image crops as the plain cards. */
+.looks-polaroid .looks-rail__track { gap: var(--s6); padding-block: var(--s4) var(--s8); align-items: start; }
+.looks-polaroid .look-card { width: clamp(220px, 21vw, 288px); padding: 12px 12px 20px; background: var(--snow);
   box-shadow: 0 1px 2px rgb(19 25 20 / 0.08), 0 16px 32px -18px rgb(19 25 20 / 0.45); rotate: -1.6deg;
   transition: rotate calc(var(--d-320) * var(--m) + .01ms) var(--ease-out), translate calc(var(--d-320) * var(--m) + .01ms) var(--ease-out), box-shadow calc(var(--d-320) * var(--m) + .01ms) var(--ease-out); }
-.is-polaroid .look-card:nth-child(3n + 2) { rotate: 1.1deg; translate: 0 10px; }
-.is-polaroid .look-card:nth-child(3n) { rotate: -0.6deg; translate: 0 3px; }
+.looks-polaroid .look-card:nth-child(3n + 2) { rotate: 1.1deg; translate: 0 10px; }
+.looks-polaroid .look-card:nth-child(3n) { rotate: -0.6deg; translate: 0 3px; }
 @media (hover: hover) and (pointer: fine) {
-  .is-polaroid .look-card:hover { rotate: 0deg; translate: 0 -4px; box-shadow: 0 1px 2px rgb(19 25 20 / 0.08), 0 22px 40px -18px rgb(19 25 20 / 0.5); }
+  .looks-polaroid .look-card:hover { rotate: 0deg; translate: 0 -4px; box-shadow: 0 1px 2px rgb(19 25 20 / 0.08), 0 22px 40px -18px rgb(19 25 20 / 0.5); }
 }
-.is-polaroid .look-card:focus-within { rotate: 0deg; }
-.is-polaroid .look-card__link { gap: var(--s4); }
-.is-polaroid .look-card__media { background: var(--lichen); }
-.is-polaroid .look-card__title { font-size: var(--fs-lead); text-align: center; text-wrap: balance; padding-inline: var(--s2); }
-.is-polaroid .look-card__meta { text-align: center; margin-top: var(--s1); font-size: var(--fs-xs); }
-
-/* ---------- design proposals (prototype only): two styles of one block, side by side ---------- */
-.proto-switch { display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; border-radius: 999px; background: var(--snow); box-shadow: 0 0 0 1px var(--line); font-size: var(--fs-xs); }
-.proto-switch__label { font-weight: 600; margin-right: 4px; }
-.proto-switch__opt { min-height: 32px; padding: 0 12px; border-radius: 999px; color: var(--ink-2); white-space: nowrap; }
-.proto-switch__opt[aria-pressed="true"] { background: var(--ink); color: var(--stone); }
+.looks-polaroid .look-card:focus-within { rotate: 0deg; }
+.looks-polaroid .look-card__link { gap: var(--s4); }
+.looks-polaroid .look-card__media { background: var(--lichen); }
+.looks-polaroid .look-card__title { font-size: var(--fs-lead); text-align: center; text-wrap: balance; padding-inline: var(--s2); }
+.looks-polaroid .look-card__meta { justify-content: center; text-align: center; margin-top: var(--s1); font-size: var(--fs-xs); }
+/* the home's rail: larger frames */
+.looks-rail.looks-polaroid .look-card { width: clamp(240px, 23vw, 340px); }
+@media (max-width: 1023px) { .looks-polaroid .look-card, .looks-rail.looks-polaroid .look-card { width: min(68vw, 300px); } }
 .looks-rail__track--static { padding-inline: 0; }
-@media (max-width: 1023px) { .look-page__grid { grid-template-columns: 1fr; } .look-page__info { position: static; } }
+@media (max-width: 1023px) { .look-page__grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "media" "info" "lead"; row-gap: clamp(var(--s6), 5vw, var(--s9)); } .look-page__info { position: static; } }
 
 /* ================= STORIA ================= */
 .storia-hero { position: relative; min-height: min(86svh, 820px); display: grid; overflow: hidden; color: var(--snow); }
@@ -1653,6 +1786,14 @@ dialog th, dialog td { white-space: normal; overflow-wrap: anywhere; }
 .blog-page__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s7) var(--s5); }
 @media (max-width: 1023px) { .blog-page__grid { grid-template-columns: 1fr 1fr; } .blog-page__lead .article-card--lead { grid-template-columns: 1fr; } }
 @media (max-width: 639px) { .blog-page__grid { grid-template-columns: 1fr; } }
+/* the articles BlogSEO publishes into the blog: a quiet list under the agents' articles (owner, 02/10) */
+.blog-page__others { margin-top: var(--section); padding-top: var(--s7); border-top: 1px solid var(--line); }
+.blog-page__others h2 { margin-bottom: var(--s5); }
+.blog-others { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s7); margin: 0; padding: 0; list-style: none; }
+.blog-others__link { display: grid; gap: 2px; padding-block: var(--s3); border-bottom: 1px solid var(--line); text-decoration: none; }
+.blog-others__title { text-wrap: pretty; }
+@media (hover: hover) and (pointer: fine) { .blog-others__link:hover .blog-others__title { text-decoration: underline; text-underline-offset: 3px; } }
+@media (max-width: 767px) { .blog-others { grid-template-columns: 1fr; } }
 .article-page__head { display: grid; gap: var(--s4); max-width: 920px; }
 .article-page__cover { margin-block: var(--s7); }
 .article-page__cover img { width: 100%; height: auto; }
@@ -1879,7 +2020,7 @@ html:not(.reduce-motion) .not-found__track path + path { animation-delay: 160ms;
 .review-modal textarea { width: 100%; margin: var(--s2) 0 var(--s4); }
 @media (max-width: 1023px) { .product-reviews__grid { grid-template-columns: 1fr; gap: var(--s6); } }
 /* while the bar's sizes are open, the floating buttons step aside instead of covering the first sizes */
-body:has([data-sticky-sheet]:not([hidden])) :is(.preview-chip, .wa-btn, .nl-teaser, .comment-fab) { opacity: 0; visibility: hidden; pointer-events: none; }
+body:has([data-sticky-sheet]:not([hidden])) :is(.preview-chip, .wa-btn, .nl-pop, .comment-fab) { opacity: 0; visibility: hidden; pointer-events: none; }
 
 /* the live gender pills (custom.genere quick filters): male sign on blue, female sign on pink, as the theme */
 ul.audience-pills { display: flex; flex-wrap: wrap; gap: var(--s2); padding-bottom: var(--s4); margin-bottom: var(--s4); border-bottom: 1px solid var(--line); }

@@ -225,69 +225,74 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   });
 })();
 
-/* ---------- look page: each piece its size (chips) and its own button, "Aggiungi" or, on a sold-out size,
-   "Avvisami" (as outfit-product-card.liquid); "Aggiungi tutto" says how many it adds; added rows are marked ---------- */
+/* ---------- look page: each piece as on the product page (owner, 02/10): its sizes, "Aggiungi al carrello", a
+   sold-out size opens the back-in-stock popup at once, three different sizes bring the size-help banner;
+   "Aggiungi tutto" adds every piece with a size; added rows are marked ---------- */
 (() => {
   const form = $('[data-look-form]');
   if (!form) return;
   const btn = $('[data-add-look]', form);
   const rows = () => $$('[data-piece]', form).filter(li => !li.classList.contains('is-unavailable'));
-  // only an available size counts: a sold-out pick is for "Avvisami"
-  const chosen = li => (li.querySelector('input[type="radio"]:checked:not([data-sold])') || {}).value;
+  const chosen = li => (li.querySelector('input[type="radio"]:checked') || {}).value;
   const pending = () => rows().filter(li => chosen(li) && li.dataset.added !== chosen(li));
-  const bell = '<svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>';
-  // the piece's own button follows its size: sold out asks to be told, otherwise it adds
-  function syncPiece(li) {
-    const b = $('[data-piece-add]', li), input = li.querySelector('input[type="radio"]:checked');
-    if (!b || b.getAttribute('aria-busy') === 'true') return;
-    const notify = input ? 'sold' in input.dataset : li.classList.contains('is-soldout');
-    b.innerHTML = notify ? `${bell} Avvisami` : 'Aggiungi';
-    b.classList.toggle('is-notify', notify);
-  }
   function mark(li, size) {
     li.dataset.added = size; li.classList.add('is-added');
     const t = li.querySelector('.look-piece__title'); if (t) t.dataset.added = size;
   }
-  // the button keeps the live label, "Aggiungi tutto"; what it adds is what has an available size chosen
-  function sync() { if (btn) btn.disabled = false; }
+  // the size-help banner (assets/size-help-nudge.js): after three different sizes of a piece, once per product
+  // per session; the line "Non sei sicuro della tua taglia?" gives way to it
+  const seen = new WeakMap();
+  function nudge(li, size) {
+    const n = $('[data-piece-nudge]', li); if (!n) return;
+    const KEY = 'sks-size-help:2:/products/' + li.dataset.piece;
+    let done = false; try { done = sessionStorage.getItem(KEY) === '1'; } catch { /* storage blocked */ }
+    if (done) return;
+    const set = seen.get(li) || new Set(); set.add(size); seen.set(li, set);
+    if (set.size < 3) return;
+    try { sessionStorage.setItem(KEY, '1'); } catch { /* ignore */ }
+    n.hidden = false; const help = $('.look-piece__help', li); if (help) help.hidden = true;
+    announce('Non sei sicuro della tua taglia?');
+  }
   form.addEventListener('change', e => {
     const li = e.target.closest('[data-piece]');
-    if (li) { syncPiece(li); const h = $('[data-piece-hint]', li); if (h) h.hidden = true; li.classList.remove('is-missing'); }
-    sync();
+    if (!li) return;
+    const h = $('[data-piece-hint]', li); if (h) h.hidden = true;
+    li.classList.remove('is-missing');
+    if (e.target.type === 'radio') nudge(li, e.target.value);
   });
-  // one piece: its size, or the hint; a sold-out size opens the back-in-stock request
   form.addEventListener('click', async e => {
+    // a sold-out size: the back-in-stock popup, as on the product page
+    const sold = e.target.closest('[data-notify-size]');
+    if (sold) { popups().then(m => m.open('notify', sold, sold.dataset.notifySize)); return; }
+    const close = e.target.closest('[data-nudge-close], .size-nudge__cta');
+    if (close) { const li = close.closest('[data-piece]'); $('[data-piece-nudge]', li).hidden = true; const help = $('.look-piece__help', li); if (help) help.hidden = false; if (!close.matches('.size-nudge__cta')) return; }
     const b = e.target.closest('[data-piece-add]');
     if (!b) return;
-    const li = b.closest('[data-piece]'), input = li.querySelector('input[type="radio"]:checked');
-    if (!input) {
+    const li = b.closest('[data-piece]'), size = chosen(li);
+    if (!size) {
       li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false;
-      (li.querySelector('input[type="radio"]:not([data-sold])') || li.querySelector('input[type="radio"]'))?.focus();
+      li.querySelector('input[type="radio"]')?.focus();
       return;
     }
-    if ('sold' in input.dataset) { popups().then(m => m.open('notify', b, input.value)); return; }
-    const info = infoFromCard(li.dataset.piece), size = input.value;
+    const info = infoFromCard(li.dataset.piece);
     if (!info) return;
     // the same piece in another size: that line is replaced, never doubled
     if (li.dataset.added && li.dataset.added !== size) Cart.remove(info.handle + '|' + li.dataset.added);
     await addWithFeedback(b, info, size, false);
     mark(li, size);
-    sync();
-    setTimeout(() => syncPiece(li), 1900); // after the shared "Aggiunto" feedback restores its label
   });
   // the size advisor added the size it advised
-  form.addEventListener('size-help:added', e => { const li = e.target.closest('[data-piece]'); if (li) { mark(li, e.detail.size); sync(); } });
+  form.addEventListener('size-help:added', e => { const li = e.target.closest('[data-piece]'); if (li) mark(li, e.detail.size); });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const add = pending();
     if (!add.length) {
       const missing = rows().filter(li => !chosen(li) && !li.dataset.added);
       missing.forEach(li => { li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false; });
-      missing[0]?.querySelector('input[type="radio"]:not([data-sold])')?.focus();
+      missing[0]?.querySelector('input[type="radio"]')?.focus();
       return;
     }
     const items = add.map(li => [infoFromCard(li.dataset.piece), chosen(li), li]).filter(x => x[0]);
-    // a piece already in the bag in another size: that line is replaced, never doubled
     items.filter(([info, , li]) => li.dataset.added && Cart.remove(info.handle + '|' + li.dataset.added));
     const [first, ...rest] = items;
     for (const [info, size] of rest) Cart.add(info, size);
@@ -295,26 +300,6 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     for (const [, size, li] of items) mark(li, size);
     rows().filter(li => !chosen(li) && !li.dataset.added).forEach(li => { li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false; });
   });
-  sync();
-})();
-
-/* ---------- design proposals (prototype only): "Altri look" as the current rail or as polaroids; the pick is
-   remembered in this browser and travels in the link (?stile=polaroid) ---------- */
-(() => {
-  const box = $('[data-looks-style]'), sw = $('[data-proto-switch]');
-  if (!box || !sw) return;
-  const set = (style, save) => {
-    box.classList.toggle('is-polaroid', style === 'polaroid');
-    $$('[data-style]', sw).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === style)));
-    if (!save) return;
-    store.set('sks-proto-looks-style', style);
-    const u = new URL(location.href);
-    style ? u.searchParams.set('stile', style) : u.searchParams.delete('stile');
-    history.replaceState(history.state, '', u);
-  };
-  const fromUrl = new URLSearchParams(location.search).get('stile');
-  set(fromUrl ?? store.get('sks-proto-looks-style', ''), false);
-  sw.addEventListener('click', e => { const b = e.target.closest('[data-style]'); if (b) set(b.dataset.style, true); });
 })();
 
 /* ---------- storia: one pinned timeline, the year column and the ski track in the same scroll() ---------- */

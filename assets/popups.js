@@ -38,6 +38,49 @@ export function wish(b) {
   if (Wish.has(P.handle) && (src === 'collection' || src === 'product_page')) existing(m, P, b); else add(m, P, b, src);
 }
 
+// "Salva il look" (native-imm.js _saveLook → IntegratedWishlist.addItems(payloads, { title: "Salva il look" })):
+// every piece still sold goes in the wishlist, without a size; a guest is first asked the e-mail in the app's
+// modal titled "Salva il look"; then the app's toast. Each add is the app's server event, source look_immersive
+export function saveLook(pieces, opener) {
+  const items = pieces.filter(p => p.sizes.length);
+  if (!items.length) return Promise.resolve(false);
+  const finish = email => {
+    store.set(WISH_EMAIL, email);
+    for (const P of items) {
+      Wish.add(P, '', false);
+      trackEvent('server:WISHLIST_ITEM_ADDED', { handle: P.handle, selectedSize: '', source: 'look_immersive' });
+    }
+    toast('Prodotto aggiunto alla wishlist');
+    return true;
+  };
+  const known = store.get(WISH_EMAIL, '');
+  if (known) return Promise.resolve(finish(known));
+  return new Promise(resolve => {
+    const d = opener.closest('dialog');
+    host = d && d.open ? d : null;
+    const m = dialogFor('wish-dialog', 'modal wish-modal', 'wish-title');
+    m.innerHTML = `<div class="modal__inner">
+    <div class="wish-modal__product wish-modal__product--plain"><h2 class="wish-modal__title" id="wish-title">Salva il look</h2>
+      <button type="button" class="icon-button wish-modal__close" aria-label="Chiudi" data-close-dialog>${icon('close')}</button></div>
+    <form class="wish-modal__form" data-wish-form novalidate>
+      <div class="wish-modal__email"><label class="field__label" for="wish-email">Email</label><input class="field__input" id="wish-email" type="email" autocomplete="email" inputmode="email"></div>
+      <p class="wish-modal__note">Procedendo riceverai email relative alla wishlist e alla disponibilità stock. Puoi disiscriverti in qualsiasi momento.</p>
+      <p class="field__error" data-wish-error hidden role="alert"></p>
+      <button type="submit" class="button button--primary button--block">Aggiungi alla wishlist</button>
+    </form>
+  </div>`;
+    let done = false;
+    $('[data-wish-form]', m).addEventListener('submit', e => {
+      e.preventDefault();
+      const input = e.target['wish-email'], email = input.value.trim(), err = $('[data-wish-error]', m);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'Inserisci un indirizzo email valido.'; err.hidden = false; input.focus(); return; }
+      done = true; closeDialog(m); resolve(finish(email));
+    });
+    m.addEventListener('close', () => { if (!done) resolve(false); }, { once: true });
+    show(m, opener);
+  });
+}
+
 function productBlock(P) {
   return `<div class="wish-modal__product">
       <img src="${SKS_FMT.cdn(P.image, 160)}" alt="" width="80" height="100">
@@ -356,7 +399,7 @@ const BIS = {
 function openNotify(opener, size) {
   // the surface is the piece or the product the size help was opened for (the advisor's own "Avvisami" too)
   const P = cur, page = !scope?.matches('[data-size-fit]');
-  const src = page ? 'product_page' : scope.closest('.look-viewer') ? 'look_immersive' : 'outfit_page';
+  const src = page ? 'product_page' : scope.closest('#look-viewer') ? 'look_immersive' : 'outfit_page';
   const T = BIS[page ? 'product_page' : 'look'];
   const one = P.sizes.length === 1 || ONE.test(size || '');
   // the looks' callers send back_in_stock_open to the dataLayer (outfit-page.js, native-imm.js); on the product
