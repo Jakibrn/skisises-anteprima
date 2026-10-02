@@ -15,7 +15,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
      moves one look (native scroll-snap), the pieces in a strip over the photo and, on a tap, in a sheet from
      the bottom with the sizes; Back closes the sheet first. ---------- */
 let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = false, dialog = null, mode = '';
-let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = null;
+let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = null, seenLooks = new Set();
   const PHONE = matchMedia('(max-width: 759px)');
   const icon = n => `<svg class="icon" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const still = () => ROOT.classList.contains('reduce-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -287,7 +287,7 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
   }
   function openSheet(piece) {
     setSheet(true, piece);
-    trackEvent('dataLayer:look_tray_open', { source: 'look_immersive', look_id: deck[at].id, piece: piece ?? null });
+    trackEvent('dataLayer:look_tray_open', { source: 'look_immersive', device: 'mobile', look_id: deck[at].id, index: at, piece_index: piece ?? null, item_id: piece == null ? null : current().pieces[piece].handle });
     // a history entry, so Back closes the sheet before the reel
     if (!sheetPushed && (pushed || landed) && urlWritable()) { history.pushState({ lookViewer: deck[at].id, lookSheet: 1 }, ''); sheetPushed = true; }
   }
@@ -340,8 +340,13 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
   function burst(media) {
     media.classList.remove('is-burst'); void media.offsetWidth; media.classList.add('is-burst');
   }
-  // new (not on live, which measures no step inside the viewer): which looks are seen and which open their pieces
-  const viewed = i => trackEvent('dataLayer:look_carousel_view', { source: 'look_immersive', look_id: deck[i].id, index: i });
+  // tracked by the owner's decision (02/10; live measures no step inside the viewer): each look seen, once per
+  // opening of the viewer (scrolling back to it does not count it again), and each opening of a look's pieces
+  function viewed(i) {
+    if (seenLooks.has(deck[i].id)) return;
+    seenLooks.add(deck[i].id);
+    trackEvent('dataLayer:look_carousel_view', { source: 'look_immersive', device: mode === 'reel' ? 'mobile' : 'desktop', look_id: deck[i].id, index: i, items: deck.length });
+  }
 
   async function onClick(e) {
     if (e.target.closest('[data-lv-step]')) { step(+e.target.closest('[data-lv-step]').dataset.lvStep); return; }
@@ -390,6 +395,7 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
     if (!deck.length) { location.href = link.href; return; }
     at = Math.max(0, deck.findIndex(d => d.id === link.dataset.lookViewer));
     build(PHONE.matches ? 'reel' : 'panel');
+    seenLooks = new Set();
     if (mode === 'reel') { panelFor = null; renderReel(); } else render();
     openDialog('look-viewer', link);
     trackEvent('dataLayer:look_carousel_open', { source: 'look_immersive', device: mode === 'reel' ? 'mobile' : 'desktop', items: deck.length, start_index: at });

@@ -885,7 +885,7 @@ html:not(.reduce-motion) .header__bag .count-badge.is-bump { animation: cart-bum
 .nl-pop__form .field__input { min-height: 48px; background: var(--snow); border-color: transparent; color: var(--ink); }
 .nl-pop__form .button { --bg: var(--on-dark); --fg: var(--forest-950); --bd: var(--on-dark); }
 .nl-pop__form .button:hover { --bg: var(--green-300); --bd: var(--green-300); }
-.nl-pop__privacy { margin-top: var(--s3); font-size: var(--fs-xs); }
+.nl-pop__privacy { margin-top: var(--s3); font-size: var(--fs-xs); line-height: 1.45; color: color-mix(in srgb, var(--stone) 82%, transparent); }
 .nl-pop__privacy a { color: inherit; }
 .nl-pop__done p { font-size: var(--fs-sm); line-height: 1.5; }
 .nl-pop__code-label { margin-top: var(--s4); font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: color-mix(in srgb, var(--stone) 80%, transparent); }
