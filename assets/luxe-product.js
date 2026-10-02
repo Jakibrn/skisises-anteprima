@@ -1,5 +1,5 @@
 // luxe-product.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- product page ---------- */
 (() => {
@@ -191,7 +191,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
 
   // recently viewed: shown under the product (the theme stored them without a section)
   const recent = Recent.list.filter(r => r.handle !== P.handle).slice(0, 4);
-  Recent.push({ handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, images: P.images, image: P.image, sizes: P.sizes, priceVaries: P.priceVaries, isNew: P.isNew, archived: P.archived });
+  whenShown(() => Recent.push({ handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, images: P.images, image: P.image, sizes: P.sizes, priceVaries: P.priceVaries, isNew: P.isNew, archived: P.archived }));
   const sec = $('[data-recent-section]');
   if (sec && recent.length >= 2) {
     registerCards(recent.map(r => ({ ...r, images: r.images || [r.image] })));
@@ -200,19 +200,6 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     renderWishState();
   }
 })();
-
-
-
-/* "Condividi" (the live share block): the phone's share sheet, else the four links */
-document.addEventListener('click', async e => {
-  const b = e.target.closest('[data-share-toggle]');
-  if (!b) return;
-  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
-    try { await navigator.share({ title: b.dataset.shareTitle, url: b.dataset.shareUrl }); return; } catch (err) { if (err.name === 'AbortError') return; }
-  }
-  const list = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
-  b.setAttribute('aria-expanded', String(open)); list.hidden = !open;
-});
 
 /* the size advisor itself is in size-help.js (89-size-help.js), loaded on the first click */
 

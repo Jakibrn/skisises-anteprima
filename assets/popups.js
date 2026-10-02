@@ -1,5 +1,5 @@
 // popups.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- wishlist heart (stands in for the back-in-stock app's wishlist-heart.js, block wishlist-app-embed):
    the live flow and copy. A heart opens one modal with the product, its sizes ("Disponibile", or a bell and
@@ -40,15 +40,15 @@ export function wish(b) {
 
 // "Salva il look" (native-imm.js _saveLook → IntegratedWishlist.addItems(payloads, { title: "Salva il look" })):
 // every piece still sold goes in the wishlist, without a size; a guest is first asked the e-mail in the app's
-// modal titled "Salva il look"; then the app's toast. Each add is the app's server event, source look_immersive
-export function saveLook(pieces, opener) {
+// modal titled "Salva il look"; then the app's toast. Each add is the app's server event (look_immersive or outfit_page)
+export function saveLook(pieces, opener, source = opener.closest('#look-viewer') ? 'look_immersive' : 'outfit_page') {
   const items = pieces.filter(p => p.sizes.length);
   if (!items.length) return Promise.resolve(false);
   const finish = email => {
     store.set(WISH_EMAIL, email);
     for (const P of items) {
       Wish.add(P, '', false);
-      trackEvent('server:WISHLIST_ITEM_ADDED', { handle: P.handle, selectedSize: '', source: 'look_immersive' });
+      trackEvent('server:WISHLIST_ITEM_ADDED', { handle: P.handle, selectedSize: '', source });
     }
     toast('Prodotto aggiunto alla wishlist');
     return true;
@@ -320,6 +320,24 @@ function mountAdvisor(d, P) {
     return { size: label, pct, basis: `altezza ${h} cm, peso ${w} kg${state.usual ? `, taglia abituale ${state.usual}` : ''}` };
   }
 
+  // the size service's alternatives (/recommendations/api/size-aware-alternatives, its headings): the same model in
+  // other colours, then the same type for the same people, all with the advised size in stock
+  const PLURAL = { giacca: 'giacche', piumino: 'giacche', cappotto: 'giacche', parka: 'giacche', gilet: 'giacche', pantaloni: 'pantaloni', jeans: 'pantaloni', camicia: 'camicie' };
+  async function alternatives(size) {
+    if (!window.SKS_SEARCH_API || !P.t) return;
+    let idx; try { idx = await window.SKS_SEARCH_API.loadIndex(); } catch { return; }
+    const has = x => x[9].some(([l, a]) => l === size && a);
+    const sib = idx.products.filter(x => P.sib.includes(x[0]) && has(x)).slice(0, 4);
+    const like = idx.products.filter(x => x[3] === P.t && x[4] === P.gen && x[0] !== P.handle && !P.sib.includes(x[0]) && has(x)).slice(0, 4);
+    if (!sib.length && !like.length || !result.isConnected) return;
+    const label = PLURAL[P.t] || 'prodotti', pre = label === 'giacche' || label === 'camicie' ? 'Altre ' : 'Altri ';
+    const card = x => `<li><a class="sz-alt" href="${BASE}products/${encodeURIComponent(x[0])}.html?taglia=${encodeURIComponent(size)}"><img src="${SKS_FMT.cdn(x[6], 160, 200)}" alt="" width="64" height="80" loading="lazy"><span><span class="sz-alt__brand" translate="no">${esc(x[2])}</span><span class="sz-alt__title">${esc(x[1])}</span><span class="sz-alt__price">${SKS_FMT.money(x[5])}</span></span></a></li>`;
+    result.insertAdjacentHTML('beforeend', `<div class="sz-alts">
+      ${sib.length ? `<p class="sz-alts__title">Disponibile nella tua taglia (${esc(size)}) in altri colori</p><ul class="sz-alts__list" role="list">${sib.map(card).join('')}</ul>` : ''}
+      ${like.length ? `<p class="sz-alts__title">${pre}${label} simili disponibili nella tua taglia</p><ul class="sz-alts__list" role="list">${like.map(card).join('')}</ul>` : ''}
+    </div>`);
+  }
+
   function render(r) {
     const s = sizeOf(r.size);
     const label = s ? s[0] : r.size;
@@ -336,6 +354,7 @@ function mountAdvisor(d, P) {
       <p><button type="button" class="link-small" data-sz-restart>Rifai il test</button></p>`;
     step('result');
     result.querySelector('button')?.focus();
+    alternatives(label);
     // as the size service's script: the tracker turns it into the size-test signal and the stored size
     document.dispatchEvent(new CustomEvent('product-intent:size-test-completed', { detail: { productHandle: P.handle, size: label, confidence: r.pct } }));
   }

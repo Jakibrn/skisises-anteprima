@@ -80,14 +80,16 @@ var SKS_CARD = (function (F) {
       return '<p class="price-list">' +
         '<span class="price price--sale"><span class="visually-hidden">Prezzo scontato </span>' + from + F.money(p.price) + '</span> ' +
         '<s class="price price--compare"><span class="visually-hidden">Prezzo originale </span>' + F.money(p.compareAt) + '</s> ' +
-        '<span class="price-list__off">−' + F.percentOff(p) + '%</span></p>';
+        '<span class="price-list__off">Risparmia ' + F.percentOff(p) + '%</span></p>'; // the live badge text (product.badge.sale)
     }
     return '<p class="price-list"><span class="price">' + from + F.money(p.price) + '</span></p>';
   }
   // snippets/product-badges.liquid: sale, bestseller, new arrival, low stock, back in stock, in this order, two per card.
-  // The sale badge is the "−30%" of the price line, so a discounted card keeps one slot for the others.
+  // The sale badge is the "Risparmia 30%" of the price line (the live text), so a discounted card keeps one slot for the others.
   function badgeList(p, max) {
     if (p.archived) return ['<li class="badge badge--muted">Non più disponibile</li>'];
+    // an active product with no size left: the live "Esaurito" badge (show_sold_out_badge, on by default)
+    if (p.sizes && p.sizes.length && !p.sizes.some(function (s) { return s[1]; })) return ['<li class="badge badge--muted">Esaurito</li>'];
     var out = [];
     if (p.bestseller) out.push('<li class="badge badge--best">Bestseller</li>');
     if (p.isNew) out.push('<li class="badge badge--new">Nuovo</li>');
@@ -325,6 +327,17 @@ document.addEventListener('click', e => {
   // the URL stays as it arrived until the shopper acts: the CRM's e-mail links (crm_link) need it exact
   if (link) lookViewer().then(v => v.openLook(link, { landed: true }));
 }
+
+/* "Condividi" (the live share block of the product and article pages): the phone's share sheet, else the four links */
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-share-toggle]');
+  if (!b) return;
+  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    try { await navigator.share({ title: b.dataset.shareTitle, url: b.dataset.shareUrl }); return; } catch (err) { if (err.name === 'AbortError') return; }
+  }
+  const list = document.getElementById(b.getAttribute('aria-controls')), open = b.getAttribute('aria-expanded') !== 'true';
+  b.setAttribute('aria-expanded', String(open)); list.hidden = !open;
+});
 
 /* ---------- header: tone over the hero, hide on scroll (home and storia), mega menus ---------- */
 (() => {
@@ -573,7 +586,11 @@ renderCart();
 /* ---------- tracking stand-in: the events the live apps record for the CRM (wishlist, back in stock, product
    intent, the look pages' dataLayer), logged here because the preview sends nothing: read them in the console
    ([tracking]) or in window.sksTracking. In the theme the apps keep sending them (CHANGES.md §11). ---------- */
+// a page prerendered by the Speculation Rules has not been seen yet: what it records waits until it is shown, and
+// never happens for a page the shopper does not open (CHANGES §11: recently viewed, persona, attribution, views)
+const whenShown = fn => { if (document.prerendering) document.addEventListener('prerenderingchange', fn, { once: true }); else fn(); };
 function trackEvent(type, data = {}) {
+  if (document.prerendering) { whenShown(() => trackEvent(type, data)); return; }
   (window.sksTracking ||= []).push({ type, ...data, at: new Date().toISOString() });
   console.debug('[tracking]', type, data);
 }
@@ -1355,4 +1372,4 @@ document.addEventListener('click', e => {
   if (!store.get('sks-comments-hint', false)) addEventListener('scroll', hint, { once: true, passive: true });
 })();
 
-export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou };
+export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou };

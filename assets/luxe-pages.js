@@ -1,5 +1,5 @@
 // luxe-pages.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- cart page, checkout summary, wishlist, search results ---------- */
 (() => {
@@ -210,6 +210,16 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     apply();
   });
 })();
+
+/* ---------- the look page's "Salva il look" (outfit-page-body.liquid: OutfitPage.favLook → IntegratedWishlist.addItems,
+   GA save_look): every piece still sold goes in the wishlist ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-save-look]');
+  if (!b) return;
+  const pieces = $$('[data-piece][data-size-fit]').map(li => JSON.parse(li.dataset.sizeFit));
+  trackEvent('dataLayer:save_look', { source: 'outfit_page', items: pieces.length });
+  popups().then(m => m.saveLook(pieces, b)).then(ok => { if (ok) b.setAttribute('aria-pressed', 'true'); }).catch(() => {});
+});
 
 /* ---------- brand A-Z filter ---------- */
 (() => {

@@ -2294,6 +2294,21 @@ html:not(.reduce-motion) .size-nudge:not([hidden]) { animation: nudge-in var(--d
 .chip-check input:checked + span { background: var(--on-dark); color: var(--forest-950); }
 .chip-check input:focus-visible + span { outline: 2px solid var(--green-300); outline-offset: 2px; }
 @media (max-width: 639px) { .newsletter-home__form { grid-template-columns: 1fr; } }
+.look-page__title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); }
+.look-page__save[aria-pressed="true"] .icon { fill: currentColor; }
+/* the notizie blog's category (snippets/blog-category*.liquid): on the cards and above the article title */
+.article-card__cat { color: var(--green-700); font-weight: 500; }
+.article-page__cat { margin-bottom: var(--s2); font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--green-700); }
+/* the size advisor's alternatives in the advised size (the size service's two groups) */
+.sz-alts { display: grid; gap: var(--s3); margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.sz-alts__title { font-weight: 600; font-size: var(--fs-sm); }
+.sz-alts__list { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.sz-alt { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s3); align-items: center; text-decoration: none; }
+.sz-alt img { width: 64px; height: 80px; object-fit: contain; background: var(--lichen); mix-blend-mode: multiply; }
+.sz-alt > span { display: grid; gap: 2px; min-width: 0; font-size: var(--fs-sm); }
+.sz-alt__brand { font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
+.sz-alt__price { font-variant-numeric: tabular-nums; }
+.sz-alts { text-align: left; }
 
 /* ================= MOTION (CSS first) =================
    Tokens in tokens.css. --m is 0 under reduced motion: movement collapses, fades stay.
