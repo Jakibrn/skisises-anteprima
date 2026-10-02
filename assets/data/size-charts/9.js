@@ -1,0 +1,1 @@
+(window.SKS_SC=window.SKS_SC||{})[9]={"name":"Leon Harper","html":"<table><thead><tr><th>Size</th><th>FR</th><th>UK</th><th>US</th></tr></thead><tbody><tr><td>XS</td><td>34</td><td>6</td><td>2</td></tr><tr><td>S</td><td>36</td><td>8</td><td>4</td></tr><tr><td>M</td><td>38</td><td>10</td><td>6</td></tr><tr><td>L</td><td>40</td><td>12</td><td>8</td></tr></tbody></table>"};

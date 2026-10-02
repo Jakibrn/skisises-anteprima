@@ -1,5 +1,5 @@
 // luxe-collection.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- proto-facets: filters, sort, density and the infinite scroll on the collection JSON ----------
    In the theme the grid is re-rendered by Prestige's facets (Section Rendering API); the UI, the URL
@@ -25,7 +25,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   const state = {
     brand: new Set(params.getAll('marca')), size: new Set(params.getAll('taglia')), color: new Set(params.getAll('colore')),
     type: params.get('tipo') || '', gender: params.get('genere') || '', sale: params.get('saldi') === '1', min: +params.get('min') || 0, max: +params.get('max') || 0,
-    sort: params.get('ordina') || 'evidenza', density: params.get('vista') || '', shown: Math.max(1, +params.get('page') || 1) * perPage
+    sort: params.get('ordina') || 'evidenza', density: '', shown: Math.max(1, +params.get('page') || 1) * perPage
   };
   const sizeOrder = l => { const s = l.toUpperCase(); const L = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL']; const li = L.indexOf(s); if (li >= 0) return 1000 + li; const m = s.match(/^(\d+(?:[.,]\d+)?)(?:\s+(\d)\/(\d))?/); if (m) return parseFloat(m[1].replace(',', '.')) + (m[2] ? m[2] / m[3] : 0); return /T\.?U/.test(s) ? 3000 : 2000; };
   const facetValues = () => {
@@ -115,7 +115,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     const looks = pristine();
     for (let i = from; i < to; i++) {
       html += SKS_CARD.render(list[i], { base: BASE });
-      if (looks && i === 4 && giftTile && list.length > 5) html += giftTile;
+      if (looks && i === 5 && giftTile && list.length > 6) html += giftTile;
       const pageEnd = (i + 1) % perPage === 0, look = looksPool[(i + 1) / perPage - 1];
       if (looks && pageEnd && look && list.length > i + 1) html += look;
     }

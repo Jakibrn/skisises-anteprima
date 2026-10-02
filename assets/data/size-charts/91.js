@@ -1,0 +1,1 @@
+(window.SKS_SC=window.SKS_SC||{})[91]={"name":"Bastoncino","html":"<table><thead><tr><th>Size</th><th>Taglia</th></tr></thead><tbody><tr><td>35</td><td>XXS</td></tr><tr><td>36</td><td>XS</td></tr><tr><td>37</td><td>S</td></tr><tr><td>38</td><td>S</td></tr><tr><td>39</td><td>M</td></tr><tr><td>40</td><td>M</td></tr><tr><td>41</td><td>L</td></tr></tbody></table>"};

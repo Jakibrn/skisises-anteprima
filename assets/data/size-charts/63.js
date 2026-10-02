@@ -1,0 +1,1 @@
+(window.SKS_SC=window.SKS_SC||{})[63]={"name":"Hartford (M) Top","html":"<table><thead><tr><th>Size</th><th>Torace (cm)</th></tr></thead><tbody><tr><td>S</td><td>91-96</td></tr><tr><td>M</td><td>96-101</td></tr><tr><td>L</td><td>101-107</td></tr><tr><td>XL</td><td>109-114</td></tr><tr><td>XXL</td><td>117-122</td></tr><tr><td>XXXL</td><td>127</td></tr></tbody></table>"};

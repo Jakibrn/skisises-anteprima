@@ -1,5 +1,5 @@
 // look-viewer.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- look viewer (assets/native-imm.js of the update): a look card opens the look over the page, the
    look page stays for the menu, the hero and the lookbook. Kept from live: the deck is the cards next to the
@@ -131,8 +131,8 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
       <div class="look-viewer__buy">
         ${gone ? `<p class="look-viewer__sold">Esaurito</p><div class="look-viewer__actions">${view('Vedi prodotto')}</div>` : `${sizes}
         <p class="look-viewer__hint" data-lv-hint>Seleziona taglia</p>
-        ${p.sizes.length > 1 ? `<p class="look-viewer__help"><button type="button" class="link-small" data-size-help="guide">${icon('ruler')} Guida taglie</button><button type="button" class="link-small product__size-help" data-size-help="advisor">${icon('hanger')}<span>Non sei sicuro della tua taglia?</span></button></p>
-        <div class="size-nudge look-viewer__nudge" data-piece-nudge hidden>${icon('hanger')}<p><strong>Non sei sicuro della tua taglia?</strong></p><button type="button" class="button button--secondary size-nudge__cta" data-size-help="advisor">Guida alle taglie</button><button type="button" class="icon-button size-nudge__close" data-nudge-close aria-label="Chiudi il suggerimento">${icon('close')}</button></div>` : ''}
+        ${p.sizes.length > 1 && (p.sc != null || p.adv) ? `<p class="look-viewer__help">${p.sc != null ? `<button type="button" class="link-small" data-size-help="guide">${icon('ruler')} Guida taglie</button>` : ''}${p.adv ? `<button type="button" class="link-small product__size-help" data-size-help="advisor">${icon('hanger')}<span>Non sei sicuro della tua taglia?</span></button>` : ''}</p>
+        ${p.adv ? `<div class="size-nudge look-viewer__nudge" data-piece-nudge hidden>${icon('hanger')}<p><strong>Non sei sicuro della tua taglia?</strong></p><button type="button" class="button button--secondary size-nudge__cta" data-size-help="advisor">Guida alle taglie</button><button type="button" class="icon-button size-nudge__close" data-nudge-close aria-label="Chiudi il suggerimento">${icon('close')}</button></div>` : ''}` : ''}
         <div class="look-viewer__actions">
           <button type="button" class="button button--primary button--small look-viewer__add" data-piece-add${avail ? '' : ' disabled'}>${avail ? 'Aggiungi al carrello' : 'Esaurito'}</button>
           ${view('Vedi prodotto')}
@@ -151,7 +151,7 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
     const set = seen.get(li) || new Set(); set.add(size); seen.set(li, set);
     if (set.size < 3) return;
     try { sessionStorage.setItem(KEY, '1'); } catch { /* ignore */ }
-    n.hidden = false; const help = $('.look-viewer__help', li); if (help) help.hidden = true;
+    n.hidden = false; const help = $('.look-viewer__help .product__size-help', li); if (help) help.hidden = true;
     announce('Non sei sicuro della tua taglia?');
   }
 
@@ -360,7 +360,7 @@ let sheetPushed = false, skipPop = false, after = null, io = null, panelFor = nu
     const sold = e.target.closest('[data-notify-size]');
     if (sold) { popups().then(m => m.open('notify', sold, sold.dataset.notifySize)); return; }
     const nclose = e.target.closest('[data-nudge-close], .size-nudge__cta');
-    if (nclose) { const li = nclose.closest('[data-lv-piece]'); $('[data-piece-nudge]', li).hidden = true; const help = $('.look-viewer__help', li); if (help) help.hidden = false; if (!nclose.matches('.size-nudge__cta')) return; }
+    if (nclose) { const li = nclose.closest('[data-lv-piece]'); $('[data-piece-nudge]', li).hidden = true; const help = $('.look-viewer__help .product__size-help', li); if (help) help.hidden = false; if (!nclose.matches('.size-nudge__cta')) return; }
     const one = e.target.closest('[data-piece-add]');
     if (one) {
       const li = one.closest('[data-lv-piece]'), p = current().pieces[+li.dataset.lvPiece], input = li.querySelector('[data-lv-size]:checked');

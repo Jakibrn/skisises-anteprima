@@ -1,0 +1,1 @@
+(window.SKS_SC=window.SKS_SC||{})[64]={"name":"Hartford (M) Swim","html":"<table><thead><tr><th>Size</th><th>FR</th></tr></thead><tbody><tr><td>XS</td><td>36</td></tr><tr><td>S</td><td>38</td></tr><tr><td>M</td><td>40</td></tr><tr><td>L</td><td>42</td></tr><tr><td>XL</td><td>44</td></tr><tr><td>XXL</td><td>46</td></tr><tr><td>3XL</td><td>48</td></tr></tbody></table>"};

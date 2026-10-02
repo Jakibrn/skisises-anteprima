@@ -89,7 +89,7 @@ var SKS_CARD = (function (F) {
   function badgeList(p, max) {
     if (p.archived) return ['<li class="badge badge--muted">Non più disponibile</li>'];
     // an active product with no size left: the live "Esaurito" badge (show_sold_out_badge, on by default)
-    if (p.sizes && p.sizes.length && !p.sizes.some(function (s) { return s[1]; })) return ['<li class="badge badge--muted">Esaurito</li>'];
+    if (p.sizes && p.sizes.length && !p.sizes.some(function (s) { return Array.isArray(s) ? s[1] : s.available; })) return ['<li class="badge badge--muted">Esaurito</li>'];
     var out = [];
     if (p.bestseller) out.push('<li class="badge badge--best">Bestseller</li>');
     if (p.isNew) out.push('<li class="badge badge--new">Nuovo</li>');
@@ -107,7 +107,7 @@ var SKS_CARD = (function (F) {
     var base = o.base || '';
     var url = base + 'products/' + encodeURIComponent(p.handle) + '.html';
     var t = splitTitle(p.title);
-    var img0 = p.images[0], img1 = p.images[1];
+    var img0 = p.images[0], img1 = p.images[1], more = p.archived ? [] : p.images.slice(1, 4);
     var native = F.nativeWidth(img0);
     var sizes = o.sizes || '(min-width: 1280px) 19vw, (min-width: 768px) 26vw, 40vw';
     var eager = o.eager ? ' fetchpriority="high"' : ' loading="lazy"';
@@ -117,8 +117,9 @@ var SKS_CARD = (function (F) {
       if (p.sizes.length === 1) {
         var only = p.sizes[0][0];
         var unica = /^(t\.?u\.?|tu|unica|taglia unica|os|one size)$/i.test(String(only).trim());
-        quick = '<button type="button" class="product-card__quick-add" data-quick-add data-size="' + F.esc(only) + '">' +
-          '<span>Aggiungi<span class="product-card__quick-hint">' + (unica ? ', taglia unica' : '') + '</span>' + (unica ? '' : ' taglia ' + F.esc(only)) + '</span></button>';
+        // the same "+" as every card (owner, 02/10: not an "Aggiungi" pill), which adds the only size at once
+        quick = '<button type="button" class="product-card__quick-toggle product-card__quick-add" data-quick-add data-size="' + F.esc(only) + '">' +
+          '<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="visually-hidden">Aggiungi' + (unica ? ', taglia unica' : ' taglia ' + F.esc(only)) + '</span></button>';
       } else {
         quick = '<div class="product-card__quick" data-quick>' +
           '<button type="button" class="product-card__quick-toggle" aria-expanded="false" data-quick-toggle>' +
@@ -154,10 +155,12 @@ var SKS_CARD = (function (F) {
     }
     return '<product-card class="product-card' + (p.archived ? ' is-archived' : '') + '" data-handle="' + F.esc(p.handle) + '">' +
       '<div class="product-card__media" data-vt-media>' +
-        '<a class="product-card__image-link" href="' + url + '" tabindex="-1" aria-hidden="true">' +
+        // on a phone a sideways swipe on the picture shows the others (owner, 02/10): their addresses wait here and the
+        // pictures are made at the first touch (40-wishlist-search.js), so a desktop or a page never touched loads none
+        '<a class="product-card__image-link" href="' + url + '" tabindex="-1" aria-hidden="true"' + (more.length ? ' data-slides="' + F.esc(JSON.stringify(more.map(function (u) { return [F.cdn(u, 720), F.srcset(u, [360, 540, 720], 0, F.nativeWidth(u))]; }))) + '"' : '') + '>' +
           '<img class="product-card__img product-card__img--primary" src="' + F.cdn(img0, 720) + '" srcset="' + F.srcset(img0, [360, 540, 720], 0, native) + '" sizes="' + sizes + '" width="1000" height="1000" alt="' + F.esc(p.title + ', ' + p.brand) + '"' + eager + ' decoding="async">' +
           (img1 ? '<img class="product-card__img product-card__img--secondary" src="' + F.cdn(img1, 720) + '" srcset="' + F.srcset(img1, [360, 540, 720], 0, F.nativeWidth(img1)) + '" sizes="' + sizes + '" width="1000" height="1000" alt="" loading="lazy" decoding="async">' : '') +
-        '</a>' + badges(p) +
+        '</a>' + (more.length ? '<span class="product-card__dots" aria-hidden="true"><i class="is-current"></i>' + more.map(function () { return '<i></i>'; }).join('') + '</span>' : '') + badges(p) +
         '<button type="button" class="product-card__wish" data-wish="' + F.esc(p.handle) + '" aria-pressed="false" aria-label="Salva nei preferiti: ' + F.esc(p.title) + '">' +
           '<svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></button>' + quick +
       '</div>' +
@@ -738,6 +741,27 @@ const Recent = {
   document.addEventListener('keydown', e => { if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openDialog('search-dialog'); } });
   window.SKS_SEARCH_API = { loadIndex, search };
 })();
+
+/* ---------- a card's pictures on a phone: a sideways swipe shows the others (data-slides of card.js). They are made
+   at the first touch, before the gesture scrolls: the next one loads at once, the rest as they come near; the dots
+   follow ---------- */
+function loadSlides(link) {
+  const list = link.dataset.slides;
+  if (!list) return;
+  link.removeAttribute('data-slides');
+  const sizes = link.querySelector('.product-card__img--primary')?.getAttribute('sizes') || '';
+  let slides = [];
+  try { slides = JSON.parse(list); } catch { return; }
+  link.insertAdjacentHTML('beforeend', slides.map(([src, srcset], i) => `<img class="product-card__img product-card__img--slide" src="${SKS_FMT.esc(src)}" srcset="${SKS_FMT.esc(srcset)}" sizes="${SKS_FMT.esc(sizes)}" width="1000" height="1000" alt=""${i ? ' loading="lazy"' : ''} decoding="async">`).join(''));
+}
+document.addEventListener('touchstart', e => { const l = e.target.closest?.('.product-card__image-link'); if (l) loadSlides(l); }, { passive: true, capture: true });
+document.addEventListener('scroll', e => {
+  const l = e.target;
+  if (!(l instanceof Element) || !l.classList.contains('product-card__image-link')) return;
+  loadSlides(l);
+  const i = Math.round(l.scrollLeft / l.clientWidth);
+  l.parentElement.querySelectorAll('.product-card__dots i').forEach((d, k) => d.classList.toggle('is-current', k === i));
+}, { passive: true, capture: true });
 
 /* ---------- rails: the live sliders' behaviour ("Prodotti simili", snippets/similar-products.liquid) over
    native scroll-snap: a page at a time, arrows over the photos disabled at the ends, swipe on touch, two
@@ -1372,4 +1396,4 @@ document.addEventListener('click', e => {
   if (!store.get('sks-comments-hint', false)) addEventListener('scroll', hint, { once: true, passive: true });
 })();
 
-export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou };
+export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou };

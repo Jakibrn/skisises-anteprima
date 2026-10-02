@@ -1,5 +1,5 @@
 // popups.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- wishlist heart (stands in for the back-in-stock app's wishlist-heart.js, block wishlist-app-embed):
    the live flow and copy. A heart opens one modal with the product, its sizes ("Disponibile", or a bell and
@@ -179,11 +179,12 @@ function existing(m, P, opener) {
    product page, every piece of a look page and the look viewer. The record (sizes, kind of guide, the brand
    table of the size service) comes from the closest [data-size-fit] (a look piece) or from #product-json (the
    product page). Over the look viewer the dialogs stack instead of closing it. Live: a size chart per piece in
-   the look (size-charts API), the advisor (snippets/size-suggestions.liquid) only on the product page. The
+   the look (size-charts API), the advisor (snippets/size-suggestions.liquid) only on the product page; each button
+   only when its service has a chart for the product. The
    advisor: two steps (usual size, height, weight; then body, belly, age, fit), then "La tua taglia consigliata"
    with a compatibility score; the preview estimates on the device with the live inputs (chest from height and
-   weight, the fit offsets of the live info page: slim -3 cm, relaxed +4 cm), the brand table when the service
-   has one, else a generic table. Inputs stay in this browser. ---------- */
+   weight, the fit offsets of the live info page: slim -3 cm, relaxed +4 cm) against the chest column of the
+   advisor's chart, else a generic table. Inputs stay in this browser. ---------- */
 const icon = n => `<svg class="icon" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const esc = s => SKS_FMT.esc(s);
 const ONE = /^(t\.?u\.?|tu|unica|os)$/i;
@@ -216,20 +217,31 @@ function dialogFor(id, cls, labelledby) {
 const show = (d, opener) => openDialog(d.id, opener, host);
 const head = (id, title, P) => `<div class="size-modal__head"><div><h2 class="d4" id="${id}">${title}</h2><p class="size-modal__product"><span translate="no">${esc(P.brand)}</span> ${esc(P.title)}</p></div><button type="button" class="icon-button" aria-label="Chiudi" data-close-dialog>${icon('close')}</button></div>`;
 
-/* the size guide: the brand table when the size service has one, else the sizes and their stock */
-function openGuide(opener) {
-  const P = cur, shoe = P.kind === 'shoes', chart = P.chart;
-  const sold = new Set(P.sizes.filter(s => !s[1]).map(s => s[0]));
+/* the size guide, as the live button (snippets/size-chart-button.liquid): the brand table of the size service, its
+   name as the title; the button exists only when the service has a table for the product. The table loads on the
+   first open (assets/data/size-charts/<n>.js, written by the build from src/data/size-charts.json). */
+const charts = {};
+function chartFor(n) {
+  return charts[n] ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = `${BASE}assets/data/size-charts/${n}.js`;
+    s.onload = () => (window.SKS_SC?.[n] ? resolve(window.SKS_SC[n]) : reject(new Error('empty')));
+    s.onerror = () => { delete charts[n]; reject(new Error('load')); };
+    document.head.append(s);
+  });
+}
+async function openGuide(opener) {
+  const P = cur, shoe = P.kind === 'shoes';
+  if (P.sc == null) return;
+  let chart;
+  try { chart = await chartFor(P.sc); } catch { toast('La guida alle taglie non si è caricata: riprova tra poco.'); return; }
+  if (cur !== P) return;
   const d = dialogFor('size-guide', 'modal size-modal', 'size-guide-title');
   d.innerHTML = `<div class="modal__inner">
-    ${head('size-guide-title', chart ? esc(chart.name) : 'Guida alle taglie', P)}
-    ${chart ? `<div class="size-modal__table"><table><thead><tr>${chart.headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${chart.rows.map(r => `<tr${sold.has(r[0]) ? ' class="is-sold"' : ''}>${r.map((c, i) => i ? `<td>${c}</td>` : `<th scope="row">${c}</th>`).join('')}</tr>`).join('')}</tbody></table></div>
-    <p class="meta">Misure del corpo in centimetri, dalla tabella della marca. Le taglie barrate sono esaurite in questo colore.</p>`
-    : `<p>${shoe ? 'Numeri di questo modello' : 'Taglie di questo capo'} e disponibilità in questo momento:</p>
-    <div class="size-modal__table"><table><thead><tr><th scope="col">${shoe ? 'Numero' : 'Taglia'}</th><th scope="col">Disponibilità</th></tr></thead><tbody>${P.sizes.map(s => `<tr><th scope="row">${esc(s[0])}</th><td>${s[1] ? (s[1] === 2 ? 'Ultimo pezzo' : 'Disponibile') : 'Esaurita'}</td></tr>`).join('')}</tbody></table></div>
-    <p class="meta">Nel tema la tabella delle misure di ${esc(P.brand)} arriva dal servizio delle taglie (size-suggestions); nell’anteprima c’è solo per Barbour uomo.</p>`}
+    ${head('size-guide-title', esc(chart.name) || 'Guida alle taglie', P)}
+    <div class="size-modal__table">${chart.html}</div>
     <details class="size-modal__how"><summary>${shoe ? 'Come misurare il piede' : 'Come prendere le misure'}</summary>${HOW[shoe ? 'shoes' : 'apparel']}</details>
-    <p><button type="button" class="link-small product__size-help" data-sh-advisor>${icon('hanger')}<span>Non sei sicuro della tua taglia? Trova la tua in due passi</span></button></p>
+    ${P.adv ? `<p><button type="button" class="link-small product__size-help" data-sh-advisor>${icon('hanger')}<span>Non sei sicuro della tua taglia?</span></button></p>` : ''}
   </div>`;
   if (!d.dataset.bound) { d.dataset.bound = '1'; d.addEventListener('click', e => { const b = e.target.closest('[data-sh-advisor]'); if (b) openAdvisor(b); }); }
   show(d, opener);
@@ -276,11 +288,12 @@ function mountAdvisor(d, P) {
   const shoes = P.kind === 'shoes', female = P.g === 'F';
   const steps = $$('[data-sz-step]', form), result = $('[data-sz-result]', form), err = $('[data-sz-error]', form);
   const bars = $$('.sz-progress span', form);
-  // generic body-chest tables (cm) when the brand has none in the size service
+  // generic body-chest tables (cm)
   const GENERIC = female
     ? [['XS', 78, 82], ['S', 82, 86], ['M', 86, 92], ['L', 92, 98], ['XL', 98, 104], ['XXL', 104, 110]]
     : [['XS', 84, 88], ['S', 88, 94], ['M', 94, 100], ['L', 100, 106], ['XL', 106, 112], ['XXL', 112, 118]];
-  const chart = P.chart ? P.chart.rows.map(r => [r[0], ...r[1].split('–').map(Number)]) : GENERIC;
+  // the chest column of the advisor's chart when it has one (snippets/size-fit.mjs), else a generic table
+  const chart = P.fit || GENERIC;
   // Italian numeric sizes some brands use instead of letters
   const IT = female ? { XS: '38', S: '40', M: '42', L: '44', XL: '46', XXL: '48' } : { XS: '44', S: '46', M: '48', L: '50', XL: '52', XXL: '54' };
   const saved = store.get(KEY, {});
@@ -320,15 +333,20 @@ function mountAdvisor(d, P) {
     return { size: label, pct, basis: `altezza ${h} cm, peso ${w} kg${state.usual ? `, taglia abituale ${state.usual}` : ''}` };
   }
 
-  // the size service's alternatives (/recommendations/api/size-aware-alternatives, its headings): the same model in
-  // other colours, then the same type for the same people, all with the advised size in stock
+  // the size service's alternatives, with its rules (src/modules/recommendations/size_aware.py, live): asked only when
+  // the advised size is not available on this product; first the same model in other colours (custom.aaa) with
+  // that size, at most 6; then similar products of the same type (Jacket ~ Blazer, Bomber, Outerwear…; Pants ~
+  // Jeans, Chino…), the same brand first, at most 8; 10 in all
   const PLURAL = { giacca: 'giacche', piumino: 'giacche', cappotto: 'giacche', parka: 'giacche', gilet: 'giacche', pantaloni: 'pantaloni', jeans: 'pantaloni', camicia: 'camicie' };
+  const SAME = [['giacca', 'piumino', 'cappotto', 'parka', 'giubbotto'], ['pantaloni', 'jeans'], ['camicia']];
+  const kin = t => SAME.find(g => g.includes(t)) || [t];
   async function alternatives(size) {
     if (!window.SKS_SEARCH_API || !P.t) return;
     let idx; try { idx = await window.SKS_SEARCH_API.loadIndex(); } catch { return; }
     const has = x => x[9].some(([l, a]) => l === size && a);
-    const sib = idx.products.filter(x => P.sib.includes(x[0]) && has(x)).slice(0, 4);
-    const like = idx.products.filter(x => x[3] === P.t && x[4] === P.gen && x[0] !== P.handle && !P.sib.includes(x[0]) && has(x)).slice(0, 4);
+    const sib = idx.products.filter(x => P.sib.includes(x[0]) && has(x)).slice(0, 6);
+    const like = idx.products.filter(x => kin(P.t).includes(x[3]) && (x[4] === P.gen || x[4] === 'unisex') && x[0] !== P.handle && !P.sib.includes(x[0]) && has(x))
+      .sort((a, b) => (b[2] === P.brand) - (a[2] === P.brand)).slice(0, Math.min(8, 10 - sib.length));
     if (!sib.length && !like.length || !result.isConnected) return;
     const label = PLURAL[P.t] || 'prodotti', pre = label === 'giacche' || label === 'camicie' ? 'Altre ' : 'Altri ';
     const card = x => `<li><a class="sz-alt" href="${BASE}products/${encodeURIComponent(x[0])}.html?taglia=${encodeURIComponent(size)}"><img src="${SKS_FMT.cdn(x[6], 160, 200)}" alt="" width="64" height="80" loading="lazy"><span><span class="sz-alt__brand" translate="no">${esc(x[2])}</span><span class="sz-alt__title">${esc(x[1])}</span><span class="sz-alt__price">${SKS_FMT.money(x[5])}</span></span></a></li>`;
@@ -354,7 +372,8 @@ function mountAdvisor(d, P) {
       <p><button type="button" class="link-small" data-sz-restart>Rifai il test</button></p>`;
     step('result');
     result.querySelector('button')?.focus();
-    alternatives(label);
+    // as live (sizeUnavailableOnCurrentProduct): the alternatives only when the advised size cannot be bought here
+    if (!s || !s[1]) alternatives(label);
     // as the size service's script: the tracker turns it into the size-test signal and the stored size
     document.dispatchEvent(new CustomEvent('product-intent:size-test-completed', { detail: { productHandle: P.handle, size: label, confidence: r.pct } }));
   }

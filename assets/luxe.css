@@ -490,6 +490,16 @@ product-card { display: block; position: relative; }
 .product-card__img--secondary { opacity: 0; }
 /* touch screens never show the second photo: not rendered, so the lazy image is never downloaded */
 @media not ((hover: hover) and (pointer: fine)) { .product-card__img--secondary { display: none; } }
+/* a phone swipes through the card's pictures (owner, 02/10); a pointer keeps the hover crossfade */
+.product-card__img--slide, .product-card__dots { display: none; }
+@media not ((hover: hover) and (pointer: fine)) {
+  .product-card__image-link { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .product-card__image-link::-webkit-scrollbar { display: none; }
+  .product-card__image-link > .product-card__img--primary, .product-card__image-link > .product-card__img--slide { position: relative; inset: auto; display: block; flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+  .product-card__dots { display: flex; position: absolute; left: 50%; bottom: 10px; translate: -50% 0; gap: 4px; z-index: 2; pointer-events: none; }
+  .product-card__dots i { width: 5px; height: 5px; border-radius: 50%; background: rgb(19 25 20 / .22); transition: background-color var(--d-160) var(--ease-out); }
+  .product-card__dots i.is-current { background: var(--ink); }
+}
 @media (hover: hover) and (pointer: fine) {
   product-card:hover .product-card__img--secondary { opacity: 1; }
   product-card:hover .product-card__img--primary:has(+ .product-card__img--secondary) { opacity: 0; }
@@ -1161,8 +1171,10 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 
 /* sport band (forest) with the ridge line */
 .sport-band { position: relative; padding-block: calc(var(--section) + 40px) var(--section); overflow: hidden; }
-.ridge { position: absolute; left: 0; top: 0; width: 100%; height: 120px; fill: none; stroke: var(--green-500); stroke-width: 1.25; vector-effect: non-scaling-stroke; opacity: 0.85; }
-.ridge path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.ridge { position: absolute; left: 0; top: -1px; width: 100%; height: calc(clamp(44px, 8.33vw, 120px) + 1px); } /* scales with the width: the same gentle slopes on a phone */
+/* above the line, the colour of the section before (the page's stone on the home) */
+.ridge__sky { fill: var(--stone); }
+.ridge__line { fill: none; stroke: var(--green-500); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 0; }
 .sport-band__grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s7) clamp(var(--s6), 5vw, var(--s9)); align-items: center; }
 .sport-band__intro { grid-column: 1 / -1; }
 .sport-band__media { margin: 0; aspect-ratio: 1; overflow: hidden; }
@@ -1197,14 +1209,14 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 @media (max-width: 1023px) { .manifesto__grid { grid-template-columns: 1fr; } }
 
 /* logo list */
-.logos__grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
-.logos__grid li { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.logos__item { display: grid; place-items: center; aspect-ratio: 2 / 1; padding: 4% 10%; transition: background-color var(--d-240) var(--ease-out); }
-.logos__item img { width: min(150px, 62%); height: auto; mix-blend-mode: multiply; filter: grayscale(1); opacity: 0.86; transition: opacity var(--d-240) var(--ease-out); }
-.logos__item:hover { background: var(--lichen); }
-.logos__name { font-family: var(--font-display); font-size: clamp(1.05rem, 1.6vw, 1.35rem); line-height: 1.2; text-align: center; color: var(--ink); }
-.logos__item:hover img { opacity: 1; }
-@media (max-width: 767px) { .logos__grid { grid-template-columns: repeat(2, 1fr); } }
+/* the header's Brand menu as a wall: each logo in a white circle, the name under it */
+.logos__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s6) var(--s4); margin: 0; padding: 0; list-style: none; }
+.logos__item { display: grid; justify-items: center; gap: var(--s3); text-decoration: none; text-align: center; }
+.logos__circle { display: grid; place-items: center; width: clamp(72px, 9vw, 104px); aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--line); transition: box-shadow var(--d-240) var(--ease-out), translate calc(var(--d-240) * var(--m) + .01ms) var(--ease-out); }
+.logos__circle img { width: 82%; height: 82%; object-fit: contain; }
+.logos__name { font-size: var(--fs-sm); line-height: 1.25; color: var(--ink-2); }
+@media (hover: hover) and (pointer: fine) { .logos__item:hover .logos__circle { box-shadow: 0 0 0 1px var(--ink); translate: 0 -2px; } .logos__item:hover .logos__name { color: var(--ink); } }
+@media (max-width: 767px) { .logos__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s5) var(--s3); } }
 
 /* services, asymmetric */
 .services__grid { display: grid; grid-template-columns: 7fr 4fr; grid-template-rows: auto auto; gap: var(--s6) clamp(var(--s5), 4vw, var(--s8)); }
@@ -1294,13 +1306,32 @@ ul.type-chips, ul.type-tiles { scroll-padding-inline: var(--gutter); }
 .density .icon { width: 18px; height: 18px; }
 .product-grid { --cols: 4; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--s7) var(--s5); padding-block: var(--s6) var(--s8); }
 .product-grid[data-density="2"] { --cols: 2; }
-.grid-look { grid-column: span 2; }
-.grid-look .look-card { width: auto; }
-.grid-look .look-card__media { aspect-ratio: 4 / 3; }
+/* a look in the grid: one column like a product (3:4) where there are three or four, both columns on a phone (4:5),
+   as live (look_span_2col 2, 3col and desktop 1) */
+.grid-look { grid-column: span 1; }
+.grid-look__card { display: grid; gap: var(--s2); align-content: start; }
+.grid-look__frame { position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; background: var(--lichen); }
+.grid-look__frame img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 15%; transition: scale calc(var(--d-480) * var(--m) + .01ms) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .grid-look__frame:hover img { scale: 1.03; } }
+.grid-look__chip { position: absolute; top: var(--s3); left: var(--s3); padding: 4px 10px; border-radius: 999px; background: var(--ink); color: var(--stone); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; }
+.grid-look__thumbs { position: absolute; left: var(--s3); right: var(--s3); bottom: var(--s3); display: flex; gap: 6px; }
+.grid-look__thumb { width: 2.125rem; height: 2.75rem; border-radius: 4px; overflow: hidden; background: var(--snow); box-shadow: 0 2px 8px rgb(0 0 0 / .18); }
+.grid-look__thumb img { width: 100%; height: 100%; object-fit: contain; padding: 6%; }
+.grid-look__title { font-size: var(--fs-sm); font-weight: 500; }
+.grid-look__title a { text-decoration: none; }
+.grid-look__meta { font-size: var(--fs-sm); color: var(--ink-2); }
+.grid-look__stock { font-size: var(--fs-xs); color: var(--green-700); }
+.grid-look__stock.is-partial { color: var(--ink-3); }
 @media (max-width: 1023px) { .product-grid { --cols: 3; } .toolbar__results { display: none; } }
 @media (max-width: 767px) {
   .product-grid { --cols: 2; gap: var(--s6) var(--s3); }
-  .product-grid[data-density="2"] { --cols: 1; }
+  .grid-look, .grid-gift { grid-column: span 2; }
+  .grid-look__frame { aspect-ratio: 4 / 5; }
+  .grid-look__thumb { width: 2.75rem; height: 3.5rem; }
+  .grid-look__title { font-size: 1rem; }
+  /* the Gift Card across a phone's two columns: picture and words side by side */
+  .gift-tile { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-rows: none; align-items: center; }
+  .gift-tile__media { aspect-ratio: 1; }
   .density [data-density="4"] .icon { display: none; }
   .applied { display: none; }
   .toolbar__inner { gap: var(--s2); justify-content: space-between; }
@@ -1470,8 +1501,8 @@ html:not(.reduce-motion) .sale-line__dot { animation: sale-pulse 2s ease-in-out 
 .brand-block__inner { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s6); align-items: center; }
 .brand-block__text { display: grid; gap: var(--s3); }
 .brand-block__intro { max-width: 62ch; color: color-mix(in srgb, var(--on-dark) 82%, transparent); line-height: 1.6; text-wrap: pretty; }
-.brand-block__logo { width: 96px; height: 96px; background: var(--on-dark); display: grid; place-items: center; border-radius: 50%; overflow: hidden; }
-.brand-block__logo img { width: 80%; mix-blend-mode: multiply; filter: grayscale(1); }
+.brand-block__logo { width: 96px; height: 96px; background: #fff; display: grid; place-items: center; border-radius: 50%; overflow: hidden; }
+.brand-block__logo img { width: 78%; height: 78%; object-fit: contain; }
 @media (max-width: 767px) { .brand-block__inner { grid-template-columns: 1fr; } }
 
 /* modal (VTO, back-in-stock) */
@@ -1666,8 +1697,25 @@ button.look-size:focus-visible > span { outline: 2px solid var(--focus); outline
 .looks-polaroid .look-card:focus-within { rotate: 0deg; }
 .looks-polaroid .look-card__link { gap: var(--s4); }
 .looks-polaroid .look-card__media { background: var(--lichen); }
-.looks-polaroid .look-card__title { font-size: var(--fs-lead); text-align: center; text-wrap: balance; padding-inline: var(--s2); }
-.looks-polaroid .look-card__meta { justify-content: center; text-align: center; margin-top: var(--s1); font-size: var(--fs-xs); }
+/* the caption and date in Caveat, the live polaroids' hand (owner, 02/10) */
+.looks-polaroid .look-card__title { font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive; font-size: clamp(1.45rem, 1.9vw, 1.75rem); font-weight: 600; line-height: 1.1; letter-spacing: 0; color: #333; text-align: center; text-wrap: balance; padding-inline: var(--s2); }
+.looks-polaroid .look-card__meta { justify-content: center; text-align: center; margin-top: 2px; font-family: 'Caveat', 'Segoe Script', cursive; font-size: 1.15rem; color: #888; }
+.looks-polaroid .look-card__count { display: none; }
+/* the tape: a strip at the top, in the live six colours */
+.looks-polaroid .look-card { position: relative; }
+.looks-polaroid .look-card__tape { position: absolute; top: -12px; left: 50%; z-index: 2; width: 64px; height: 24px; translate: -50% 0; border-radius: 2px; opacity: .82; background: #b5c8e2; box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.looks-polaroid .look-card:nth-child(6n + 2) .look-card__tape { background: #c8ddb5; }
+.looks-polaroid .look-card:nth-child(6n + 3) .look-card__tape { background: #e2c8b5; }
+.looks-polaroid .look-card:nth-child(6n + 4) .look-card__tape { background: #d4b5e2; }
+.looks-polaroid .look-card:nth-child(6n + 5) .look-card__tape { background: #e2e2b5; }
+.looks-polaroid .look-card:nth-child(6n) .look-card__tape { background: #b5e2d4; }
+/* "Scopri il Look · N" on the photo, as live */
+.look-card__media { position: relative; }
+.look-card__pill { display: none; }
+.looks-polaroid .look-card__pill { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 16px); padding: 5px 10px; border-radius: 16px; background: rgb(0 0 0 / .62); color: #fff; font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.looks-polaroid .look-card__pill .icon { width: 12px; height: 12px; }
+.look-card__tape { display: none; }
+.looks-polaroid .look-card__tape { display: block; }
 /* the home's rail: larger frames */
 .looks-rail.looks-polaroid .look-card { width: clamp(240px, 23vw, 340px); }
 @media (max-width: 1023px) { .looks-polaroid .look-card, .looks-rail.looks-polaroid .look-card { width: min(68vw, 300px); } }
@@ -1907,13 +1955,20 @@ html:not(.reduce-motion) .not-found__track path + path { animation-delay: 160ms;
 .size-modal__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); margin-top: calc(-1 * var(--s2)); }
 .size-modal__head h2 { margin-top: 6px; }
 .size-modal__product { margin-top: 2px; font-size: var(--fs-sm); color: var(--ink-3); }
-.size-modal__table { border: 1px solid var(--line); border-radius: var(--radius); }
+.size-modal__table { border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; overscroll-behavior-x: contain; }
+#size-guide { width: min(94%, 800px); } /* the brand tables run to 8 columns, as the live dialog (800px) */
+/* a brand table keeps its columns readable: as wide as its content (at least the dialog), the box scrolls sideways
+   with the size column held in place, as the live .sc-table-wrap does without the held column */
+.size-modal__table table { table-layout: auto; width: max-content; min-width: 100%; }
+.size-modal__table th, .size-modal__table td { white-space: nowrap; overflow-wrap: normal; }
+.size-modal__table tr > :first-child { position: sticky; left: 0; z-index: 1; background: var(--snow); box-shadow: inset -1px 0 0 var(--line); }
+.size-modal__table table:not(:has(thead)) tr:first-child > * { background: var(--lichen); font-weight: 600; font-size: var(--fs-xs); }
+.size-modal__table p { margin: var(--s2) 12px; font-size: var(--fs-xs); color: var(--ink-2); }
 .size-modal__table table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .size-modal__table th, .size-modal__table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
 @media (max-width: 480px) { .size-modal__table table { font-size: var(--fs-xs); } .size-modal__table th, .size-modal__table td { padding: 8px 6px; } }
-.size-modal__table thead th { background: var(--lichen); font-weight: 600; font-size: var(--fs-xs); }
+.size-modal__table thead th, .size-modal__table thead tr > :first-child { background: var(--lichen); font-weight: 600; font-size: var(--fs-xs); }
 .size-modal__table tbody tr:last-child > * { border-bottom: 0; }
-.size-modal__table tr.is-sold > * { color: var(--ink-3); text-decoration: line-through; }
 .size-modal__how summary { cursor: pointer; font-weight: 500; min-height: 40px; display: flex; align-items: center; }
 .size-modal__how ul { padding-left: 1.2em; display: grid; gap: var(--s2); font-size: var(--fs-sm); color: var(--ink-2); }
 .sz-progress { display: flex; gap: 6px; }
@@ -2310,6 +2365,19 @@ html:not(.reduce-motion) .size-nudge:not([hidden]) { animation: nudge-in var(--d
 .sz-alt__price { font-variant-numeric: tabular-nums; }
 .sz-alts { text-align: left; }
 
+/* "Servizi in negozio" on phones: columns that scroll sideways, as the live home (owner, 02/10), each card the
+   same size, the next one showing at the edge */
+@media (max-width: 767px) {
+  .services__grid { display: flex; gap: var(--s4); overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter); margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scrollbar-width: none; overscroll-behavior-x: contain; }
+  .services__grid::-webkit-scrollbar { display: none; }
+  .services__grid > .service { flex: 0 0 82%; scroll-snap-align: start; }
+  .service--large .service__media, .service:not(.service--large) .service__media { aspect-ratio: 4 / 3; }
+  .service--large h3 { font-size: var(--fs-d4); }
+}
+
+/* the product page's pictures on white (owner, 02/10) */
+.product__media { background: #fff; }
+
 /* ================= MOTION (CSS first) =================
    Tokens in tokens.css. --m is 0 under reduced motion: movement collapses, fades stay.
    Hidden starting states exist only under html.motion-ready (set by luxe.js once it runs), so a page
@@ -2341,8 +2409,8 @@ html.motion-ready:not(.reduce-motion)[data-mode="experience"] .reveal-image:not(
 html.motion-ready:not(.reduce-motion) .reveal-image:not(.is-in) img { transform: scale(1.04); }
 
 /* 12. ridge line, drawn once on entry */
-html.motion-ready:not(.reduce-motion) .ridge:not(.is-in) path { stroke-dashoffset: 1; }
-.ridge.is-in path { transition: stroke-dashoffset 1600ms var(--ease-mask); }
+html.motion-ready:not(.reduce-motion) .ridge:not(.is-in) .ridge__line { stroke-dashoffset: 1; }
+.ridge.is-in .ridge__line { transition: stroke-dashoffset 1600ms var(--ease-mask); }
 
 /* 2. cross-document View Transitions (Chrome 126+, Safari 18.2+): a short crossfade; the header keeps its
       own name so it never flickers; the product image morphs via the shared name set in pageswap */

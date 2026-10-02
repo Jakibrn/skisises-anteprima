@@ -1,5 +1,5 @@
 // luxe-pages.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- cart page, checkout summary, wishlist, search results ---------- */
 (() => {
@@ -260,7 +260,7 @@ document.addEventListener('click', e => {
     const set = seen.get(li) || new Set(); set.add(size); seen.set(li, set);
     if (set.size < 3) return;
     try { sessionStorage.setItem(KEY, '1'); } catch { /* ignore */ }
-    n.hidden = false; const help = $('.look-piece__help', li); if (help) help.hidden = true;
+    n.hidden = false; const help = $('.look-piece__help .product__size-help', li); if (help) help.hidden = true;
     announce('Non sei sicuro della tua taglia?');
   }
   form.addEventListener('change', e => {
@@ -275,7 +275,7 @@ document.addEventListener('click', e => {
     const sold = e.target.closest('[data-notify-size]');
     if (sold) { popups().then(m => m.open('notify', sold, sold.dataset.notifySize)); return; }
     const close = e.target.closest('[data-nudge-close], .size-nudge__cta');
-    if (close) { const li = close.closest('[data-piece]'); $('[data-piece-nudge]', li).hidden = true; const help = $('.look-piece__help', li); if (help) help.hidden = false; if (!close.matches('.size-nudge__cta')) return; }
+    if (close) { const li = close.closest('[data-piece]'); $('[data-piece-nudge]', li).hidden = true; const help = $('.look-piece__help .product__size-help', li); if (help) help.hidden = false; if (!close.matches('.size-nudge__cta')) return; }
     const b = e.target.closest('[data-piece-add]');
     if (!b) return;
     const li = b.closest('[data-piece]'), size = chosen(li);

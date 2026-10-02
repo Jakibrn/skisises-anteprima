@@ -1,0 +1,1 @@
+(window.SKS_SC=window.SKS_SC||{})[58]={"name":"Bsbee","html":"<table><thead><tr><th>Size</th><th>ITA</th></tr></thead><tbody><tr><td>XXS</td><td>36</td></tr><tr><td>XS</td><td>38</td></tr><tr><td>S</td><td>40</td></tr><tr><td>M</td><td>42</td></tr><tr><td>L</td><td>44</td></tr><tr><td>XL</td><td>46</td></tr><tr><td>XXL</td><td>48</td></tr></tbody></table>"};
