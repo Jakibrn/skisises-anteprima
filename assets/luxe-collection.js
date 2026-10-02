@@ -1,5 +1,5 @@
 // luxe-collection.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- proto-facets: filters, sort, density and the infinite scroll on the collection JSON ----------
    In the theme the grid is re-rendered by Prestige's facets (Section Rendering API); the UI, the URL
@@ -72,7 +72,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     if (state.min) q.set('min', state.min); if (state.max) q.set('max', state.max);
     if (state.sort !== 'evidenza') q.set('ordina', state.sort); if (state.density) q.set('vista', state.density);
     if (state.shown > perPage) q.set('page', Math.ceil(state.shown / perPage));
-    history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+    if (urlWritable()) history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
   }
 
   function renderFacets() {
@@ -141,6 +141,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     if (from >= to) return false;
     grid.insertAdjacentHTML('beforeend', cardsHtml(current, from, to));
     state.shown = to;
+    // the wishlist app's hearts and the CRM's page count listen for this (CHANGES §11)
+    document.dispatchEvent(new CustomEvent('infinite-scroll:loaded', { detail: { page: Math.ceil(to / perPage) } }));
     renderWishState();
     status();
     syncUrl();

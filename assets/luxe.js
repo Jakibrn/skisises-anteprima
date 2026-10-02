@@ -178,6 +178,10 @@ const BASE = ROOT.dataset.base || '';
 const MOTION_OK = () => !ROOT.classList.contains('reduce-motion');
 const FINE_POINTER = matchMedia('(hover: hover) and (pointer: fine)');
 
+// the CRM's e-mail links carry ?crm_link=, which the tracker redeems against the exact landing URL: no script
+// rewrites the URL while it is there (CHANGES §11)
+const urlWritable = () => !new URLSearchParams(location.search).has('crm_link');
+
 // storage that never throws (private windows, blocked site data) and falls back to memory
 const memory = {};
 const store = {
@@ -225,10 +229,10 @@ const productUrl = h => `${BASE}products/${encodeURIComponent(h)}.html`;
 const yieldToMain = () => (window.scheduler && scheduler.yield) ? scheduler.yield() : new Promise(r => setTimeout(r, 0));
 
 // delivery window in Italy, as the shipping page states: 1-3 working days from the next working day
-function deliveryWindow(fmt = { weekday: 'long', day: 'numeric', month: 'long' }) {
+function deliveryWindow(fmt = { weekday: 'long', day: 'numeric', month: 'long' }, art = '') {
   const add = (date, n) => { const x = new Date(date); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) n--; } return x; };
   const now = new Date(), f = new Intl.DateTimeFormat('it-IT', fmt);
-  return `tra ${f.format(add(now, 1))} e ${f.format(add(now, 3))}`;
+  return `tra ${art}${f.format(add(now, 1))} e ${art}${f.format(add(now, 3))}`;
 }
 
 // tracking consent from the cookie banner (97-floating.js): the for-you sources use the visitor's searches
@@ -237,10 +241,11 @@ function trackingOK() { const c = store.get('sks-consent', null); return c === '
 
 /* ---------- dialogs: native <dialog> gives focus trap, Esc and an inert page; we return focus ---------- */
 const openers = new WeakMap();
-function openDialog(id, opener) {
+// keep: a dialog that stays open under this one (the look viewer under a piece's size guide)
+function openDialog(id, opener, keep) {
   const d = document.getElementById(id);
   if (!d || d.open) return d;
-  $$('dialog[open]').forEach(o => o !== d && closeDialog(o));
+  $$('dialog[open]').forEach(o => o !== d && o !== keep && closeDialog(o));
   openers.set(d, opener || document.activeElement);
   d.showModal();
   d.dispatchEvent(new CustomEvent('dialog:open'));
@@ -295,6 +300,17 @@ document.addEventListener('click', e => {
 });
 $('#drawer-menu')?.addEventListener('dialog:close', () => $$('.drawer-nav__panel').forEach(p => { p.hidden = true; }));
 
+/* ---------- product popups (popups.js): the wishlist heart's modal, "Guida taglie", "Non sei sicuro della tua
+   taglia?" and "Avvisami" load on the first click; pointing at one starts the download ---------- */
+const popups = () => import(new URL('popups.js', import.meta.url).href);
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-size-help]');
+  if (!b) return;
+  e.preventDefault();
+  popups().then(m => m.open(b.dataset.sizeHelp, b)).catch(() => toast('La guida alle taglie non si è caricata: riprova tra poco.'));
+});
+['pointerover', 'focusin'].forEach(t => document.addEventListener(t, e => { if (e.target.closest?.('[data-size-help]')) popups(); }, { passive: true }));
+
 /* ---------- the look viewer (look-viewer.js) loads on the first look a shopper opens; a #look-<id> link opens it
    on that look when the page shows it. Without JavaScript the card goes to the look page. ---------- */
 const lookViewer = () => import(new URL('look-viewer.js', import.meta.url).href);
@@ -306,7 +322,8 @@ document.addEventListener('click', e => {
 });
 {
   const m = location.hash.match(/^#look-([\w-]+)$/), link = m && $(`[data-look-viewer="${m[1]}"]`);
-  if (link) { history.replaceState(null, '', location.pathname + location.search); lookViewer().then(v => v.openLook(link)); }
+  // the URL stays as it arrived until the shopper acts: the CRM's e-mail links (crm_link) need it exact
+  if (link) lookViewer().then(v => v.openLook(link, { landed: true }));
 }
 
 /* ---------- header: tone over the hero, hide on scroll (home and storia), mega menus ---------- */
@@ -556,26 +573,47 @@ document.addEventListener('cart:change', () => renderCart());
 addEventListener('storage', e => { if (e.key === 'sks-cart') renderCart(); });
 renderCart();
 
-/* ---------- wishlist (stands in for the back-in-stock app's /apps/wishlist) ---------- */
+/* ---------- tracking stand-in: the events the live apps record for the CRM (wishlist, back in stock, product
+   intent, the look pages' dataLayer), logged here because the preview sends nothing: read them in the console
+   ([tracking]) or in window.sksTracking. In the theme the apps keep sending them (CHANGES.md §11). ---------- */
+function trackEvent(type, data = {}) {
+  (window.sksTracking ||= []).push({ type, ...data, at: new Date().toISOString() });
+  console.debug('[tracking]', type, data);
+}
+
+// product-intent-tracker.js's engagement signals on the product page, with its own selectors (the theme keeps the
+// markup they match: CHANGES §11); [data-notify-size] is the one selector the port adds to the tracker
+if ($('#product-json')) {
+  const SIGNALS = [['size_chart_opened', "[href*='size'], [data-size-chart], button[class*='size']"], ['reviews_clicked', "[href*='review'], [data-review], .jdgm, .reviews"],
+    ['description_opened', "details, [aria-controls*='description'], [data-accordion]"], ['materials_shipping_clicked', "[href*='shipping'], [href*='material'], [data-shipping], [data-material]"],
+    ['add_to_cart_hover_or_click', "form[action*='/cart/add'] button[type='submit'], button[name='add']"], ['wishlist_clicked', ".integrated-wishlist-heart, [data-wishlist], [aria-label*='wishlist' i]"],
+    ['back_in_stock_clicked', '[data-back-in-stock-button], .bis-widget-button, [data-notify-size]']];
+  document.addEventListener('click', e => { for (const [name, sel] of SIGNALS) if (e.target.closest?.(sel)) trackEvent(`product_intent:${name}`); }, true);
+}
+document.addEventListener('product-intent:size-test-completed', e => trackEvent('product_intent:size_test_completed', e.detail));
+
+/* ---------- wishlist (stands in for the back-in-stock app's /apps/wishlist): a heart opens the app's modal
+   (popups.js, loaded on the first heart; pointing at one starts the download) ---------- */
 const Wish = {
   get list() { return store.get('sks-wish', []); },
   has(h) { return this.list.some(x => x.handle === h); },
-  toggle(h) {
-    let list = this.list;
-    const on = !list.some(x => x.handle === h);
-    if (on) { const c = CARDS[h]; list.unshift({ handle: h, title: c?.t, brand: c?.b, price: c?.p, compareAt: c?.c, images: [c?.i], sizes: c?.s || [] }); }
-    else list = list.filter(x => x.handle !== h);
-    store.set('sks-wish', list);
-    document.dispatchEvent(new CustomEvent('wish:change'));
-    return on;
-  }
+  // the size the shopper chose travels with the item, and a sold-out size carries its stock alert
+  add(P, size, stockAlert) {
+    const list = this.list.filter(x => x.handle !== P.handle);
+    list.unshift({ handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt || 0, images: [P.image], sizes: P.sizes || [], size: size || null, stockAlert: !!stockAlert });
+    this.save(list);
+  },
+  remove(h) { this.save(this.list.filter(x => x.handle !== h)); },
+  save(list) { store.set('sks-wish', list); document.dispatchEvent(new CustomEvent('wish:change')); }
 };
 function renderWishState() {
   const list = Wish.list;
   $$('[data-wish]').forEach(b => {
     const on = list.some(x => x.handle === b.dataset.wish);
     b.setAttribute('aria-pressed', String(on));
-    if (b.classList.contains('product__wish')) b.setAttribute('aria-label', on ? 'Salvato nei preferiti: togli' : 'Salva nei preferiti');
+    // the app's labels: "Aggiungi alla wishlist" / "Rimuovi dalla wishlist"
+    b.setAttribute('aria-label', on ? 'Rimuovi dalla wishlist' : 'Aggiungi alla wishlist');
+    b.title = on ? 'Rimuovi dalla wishlist' : 'Aggiungi alla wishlist';
   });
   $$('[data-wish-count]').forEach(c => { c.hidden = !list.length; c.textContent = list.length; });
 }
@@ -583,13 +621,13 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-wish]');
   if (!b) return;
   e.preventDefault();
-  const on = Wish.toggle(b.dataset.wish);
-  const title = CARDS[b.dataset.wish]?.t || 'Prodotto';
-  announce(on ? `${title} salvato nei preferiti` : `${title} tolto dai preferiti`);
-  if (on) toast('Salvato nei preferiti', { label: 'Vedi', run: () => { location.href = `${BASE}pages/swym-wishlist.html`; } });
+  popups().then(m => m.wish(b)).catch(() => toast('La wishlist non si è caricata: riprova tra poco.'));
 });
+['pointerover', 'focusin'].forEach(t => document.addEventListener(t, e => { if (e.target.closest?.('[data-wish]')) popups(); }, { passive: true }));
 document.addEventListener('wish:change', renderWishState);
 renderWishState();
+// the app counts one view of its hearts per page (WISHLIST_ICON_VIEWED)
+if ($('[data-wish]')) trackEvent('WISHLIST_ICON_VIEWED', { source: $('#product-json') ? 'product_page' : 'collection' });
 
 /* ---------- recently viewed ---------- */
 const Recent = {
@@ -1222,4 +1260,4 @@ document.addEventListener('click', e => {
   if (!store.get('sks-comments-hint', false)) addEventListener('scroll', hint, { once: true, passive: true });
 })();
 
-export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou };
+export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou };

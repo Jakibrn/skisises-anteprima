@@ -63,7 +63,7 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
 <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.5 4.5h13L20 9.5M4 9.5v10h16v-10M4 9.5h16M9.5 19.5v-5h5v5"/></symbol>
 </svg>
 <div class="announcement-bar" role="region" aria-label="Avvisi">
-  <p class="announcement-bar__text">Spedizione gratuita in Italia da 50,00&nbsp;€<span class="announcement-bar__extra">. Resi entro 14 giorni.</span></p>
+  <p class="announcement-bar__text">Spedizione gratis in Italia per ordini superiori a €50</p>
 </div>
 <header class="header" data-header>
   <div class="header__bar container">
@@ -73,7 +73,7 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
       <div class="header__locale"><div class="locale locale--header" data-locale>
   <div class="locale__item">
     <button type="button" class="locale__btn" aria-expanded="false" aria-controls="country-header" aria-label="Paese e valuta: Italia, EUR €">
-      <img class="locale__flag" src="https://cdn.shopify.com/static/images/flags/it.svg" width="18" height="18" alt=""><span>EUR €</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg>
+      <img class="locale__flag" src="https://cdn.shopify.com/static/images/flags/it.svg" width="18" height="18" alt=""><span>Italia (EUR €)</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg>
     </button>
     <div class="locale__pop" id="country-header" hidden>
       <p class="locale__title">Paese o area geografica</p>
@@ -81,7 +81,7 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
     </div>
   </div>
   <div class="locale__item">
-    <button type="button" class="locale__btn" aria-expanded="false" aria-controls="lang-header" aria-label="Lingua: Italiano"><span>IT</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg></button>
+    <button type="button" class="locale__btn" aria-expanded="false" aria-controls="lang-header" aria-label="Lingua: Italiano"><span>Italiano</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg></button>
     <div class="locale__pop locale__pop--lang" id="lang-header" hidden>
       <p class="locale__title">Lingua</p>
       <ul class="locale__list" role="list"><li><button type="button" class="locale__opt" data-locale-pick="Italiano" lang="it" aria-pressed="true">Italiano</button></li><li><button type="button" class="locale__opt" data-locale-pick="English" lang="en" aria-pressed="false">English</button></li><li><button type="button" class="locale__opt" data-locale-pick="Español" lang="es" aria-pressed="false">Español</button></li><li><button type="button" class="locale__opt" data-locale-pick="Deutsch" lang="de" aria-pressed="false">Deutsch</button></li><li><button type="button" class="locale__opt" data-locale-pick="Français" lang="fr" aria-pressed="false">Français</button></li><li><button type="button" class="locale__opt" data-locale-pick="Ελληνικά" lang="el" aria-pressed="false">Ελληνικά</button></li><li><button type="button" class="locale__opt" data-locale-pick="Nederlands" lang="nl" aria-pressed="false">Nederlands</button></li><li><button type="button" class="locale__opt" data-locale-pick="Português" lang="pt-PT" aria-pressed="false">Português</button></li><li><button type="button" class="locale__opt" data-locale-pick="Svenska" lang="sv" aria-pressed="false">Svenska</button></li></ul>
@@ -376,34 +376,33 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
     <li class="promises__item">
       <img class="promises__icon" src="https://cdn.shopify.com/s/files/1/0767/4920/9925/files/shipping.png?v=1779886270&width=88" width="44" height="44" alt="" loading="lazy" decoding="async">
       <h3 class="promises__title">Spedizione gratis</h3>
-      <p class="promises__text">In Italia per ordini da 50,00 €, con consegna rapida.</p>
+      <p class="promises__text" data-store-copy>Spedizione gratuita in Italia per ordini superiori a €50 con consegna rapida.</p>
     </li><li class="promises__item">
       <img class="promises__icon" src="https://cdn.shopify.com/s/files/1/0767/4920/9925/files/pack.png?v=1779886270&width=88" width="44" height="44" alt="" loading="lazy" decoding="async">
       <h3 class="promises__title">Consegna rapida</h3>
-      <p class="promises__text">Prepariamo l’ordine con cura e lo consegniamo in 1-3 giorni lavorativi.</p>
+      <p class="promises__text" data-store-copy>Gli ordini vengono preparati con cura e consegnati in 1–3 giorni lavorativi.</p>
     </li><li class="promises__item">
       <img class="promises__icon" src="https://cdn.shopify.com/s/files/1/0767/4920/9925/files/customer_service.png?v=1779886269&width=88" width="44" height="44" alt="" loading="lazy" decoding="async">
       <h3 class="promises__title">Servizio clienti</h3>
-      <p class="promises__text">Prima e dopo l’acquisto: <a href="mailto:servizioclienti@skisises.it">servizioclienti@skisises.it</a> · <a href="tel:+39015405464">+39 015 405464</a></p>
+      <p class="promises__text" data-store-copy>Supporto dedicato prima e dopo l’acquisto — <a href="mailto:servizioclienti@skisises.it">servizioclienti@skisises.it</a> · <a href="tel:+39015405464">+39 015 405464</a></p>
     </li><li class="promises__item">
       <img class="promises__icon" src="https://cdn.shopify.com/s/files/1/0767/4920/9925/files/returns.png?v=1779886270&width=88" width="44" height="44" alt="" loading="lazy" decoding="async">
       <h3 class="promises__title">Resi garantiti</h3>
-      <p class="promises__text">Puoi chiedere il reso entro 14 giorni dal ricevimento dell’ordine.</p>
+      <p class="promises__text" data-store-copy>Puoi richiedere il reso entro 14 giorni dalla ricezione del tuo ordine.</p>
     </li>
   </ul>
 </section>
 <footer class="footer scheme-forest">
   <div class="container footer__top">
     <div class="footer__newsletter">
-      <h2 class="footer__title">Il 10% sul primo ordine</h2>
-      <p class="footer__lead">Ti scriviamo quando arrivano le collezioni nuove e quando i capi che segui vanno in sconto. Nient’altro. Il codice vale sui prodotti non in saldo.</p>
+      <h2 class="footer__title">Iscriviti per un 10% sul primo ordine</h2>
       <form class="newsletter-form" data-proto-form="Iscrizione registrata solo in anteprima: nessuna email è stata inviata.">
-        <label class="field__label" for="newsletter-email">La tua email</label>
+        <label class="field__label" for="newsletter-email">E-mail</label>
         <div class="field-row">
           <input class="field__input" id="newsletter-email" name="email" type="email" autocomplete="email" inputmode="email" required>
-          <button type="submit" class="button button--on-dark">Iscriviti</button>
+          <button type="submit" class="button button--on-dark">Iscriviti alla newsletter</button>
         </div>
-        <p class="field__hint">Puoi cancellarti con un clic da ogni email. <a href="gdpr-privacy-policy-1.html" >Privacy</a></p>
+        <p class="field__hint"><a href="gdpr-privacy-policy-1.html" >Informativa sulla privacy</a></p>
       </form>
     </div>
   </div>
@@ -525,27 +524,27 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
 </dialog>
 <a class="wa-btn" href="https://wa.me/39015405464?text=Ciao%2C%20vorrei%20un%E2%80%99informazione" target="_blank" rel="noopener" data-no-prerender aria-label="Scrivici su WhatsApp"><svg class="wa-btn__logo" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16.04 3C8.9 3 3.1 8.8 3.1 15.94c0 2.28.6 4.5 1.73 6.46L3 29l6.77-1.78a12.9 12.9 0 0 0 6.27 1.6h.01c7.13 0 12.94-5.8 12.94-12.94C28.99 8.8 23.17 3 16.04 3Zm0 23.65h-.01a10.7 10.7 0 0 1-5.46-1.5l-.39-.23-4.02 1.05 1.07-3.92-.25-.4a10.67 10.67 0 0 1-1.64-5.71c0-5.9 4.8-10.7 10.71-10.7 2.86 0 5.55 1.12 7.57 3.14a10.63 10.63 0 0 1 3.13 7.57c0 5.9-4.8 10.7-10.71 10.7Zm5.87-8.01c-.32-.16-1.91-.94-2.2-1.05-.3-.11-.51-.16-.73.16-.21.32-.83 1.05-1.02 1.26-.19.22-.38.24-.7.08-.32-.16-1.36-.5-2.59-1.6-.96-.85-1.6-1.9-1.8-2.22-.18-.32-.02-.5.15-.66.14-.14.32-.38.48-.56.16-.19.21-.32.32-.54.1-.21.05-.4-.03-.56-.08-.16-.73-1.75-1-2.4-.26-.63-.53-.54-.73-.55h-.62c-.21 0-.56.08-.86.4-.3.32-1.12 1.1-1.12 2.68 0 1.58 1.15 3.1 1.31 3.32.16.21 2.26 3.45 5.47 4.84.77.33 1.37.53 1.83.68.77.24 1.47.21 2.02.13.62-.09 1.91-.78 2.18-1.53.27-.75.27-1.4.19-1.53-.08-.13-.29-.21-.61-.37Z"/></svg><span class="wa-btn__label">Contattaci</span></a>
 <div class="nl-teaser" data-nl-teaser hidden>
-  <button type="button" class="nl-teaser__open" data-open-dialog="nl-dialog"><span class="nl-teaser__long">Iscriviti: <strong>-10%</strong> sul primo ordine</span><span class="nl-teaser__short">Iscriviti <strong>-10%</strong></span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg></button>
+  <button type="button" class="nl-teaser__open" data-open-dialog="nl-dialog"><span class="nl-teaser__long">Iscriviti per un <strong>-10%</strong></span><span class="nl-teaser__short"><strong>-10%</strong></span><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-chevron-down"/></svg></button>
   <button type="button" class="nl-teaser__close" data-nl-dismiss aria-label="Chiudi l’offerta"><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button>
 </div>
 <dialog class="modal nl-dialog" id="nl-dialog" aria-labelledby="nl-title">
-  <form class="modal__inner" data-proto-form="Fatto: nella tua email trovi il codice del 10%. (Anteprima: nessuna email inviata.)" data-close-on-success data-nl-form>
-    <p class="nl-dialog__kicker">Entra nella squadra</p>
-    <h2 class="d3" id="nl-title">10% di sconto sul primo ordine</h2>
-    <p class="muted">Ti scriviamo solo per le nuove collezioni e gli sconti che ti riguardano. Il codice arriva subito nella tua email e vale sui prodotti non in saldo.</p>
-    <label class="field__label" for="nl-email">La tua email</label>
+  <form class="modal__inner" data-proto-form="Usa il codice WELCOME10 al checkout per ottenere il 10% di sconto sul tuo primo ordine sui prodotti non in saldo. (Anteprima: nessuna iscrizione registrata.)" data-close-on-success data-nl-form>
+    <button type="button" class="icon-button nl-dialog__close" data-close-dialog aria-label="Chiudi"><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button>
+    <h2 class="d3" id="nl-title">Iscriviti per un -10%</h2>
+    <p class="muted" data-store-copy>Inserisci il tuo indirizzo mail per ricevere un buono del 10% sul tuo primo acquisto (valido sui prodotti non in saldo)</p>
+    <label class="field__label" for="nl-email">E-mail</label>
     <input class="field__input" id="nl-email" type="email" autocomplete="email" inputmode="email" required>
-    <p class="meta">Iscrivendoti accetti l’<a href="gdpr-privacy-policy-1.html" >informativa sulla privacy</a>. Puoi cancellarti con un clic.</p>
-    <div class="modal__actions"><button type="button" class="button button--outline" data-close-dialog>No, grazie</button><button type="submit" class="button button--primary">Ricevi il 10%</button></div>
+    <p class="meta"><a href="gdpr-privacy-policy-1.html" >Informativa sulla privacy</a></p>
+    <div class="modal__actions"><button type="submit" class="button button--primary">Iscriviti</button></div>
   </form>
 </dialog>
 <section class="cookie-banner" data-cookie-banner aria-labelledby="cookie-title" hidden>
   <button type="button" class="cookie-banner__close" data-cookie="reject" aria-label="Chiudi senza accettare i cookie non necessari"><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button>
   <div class="cookie-banner__main" data-cookie-main>
-    <p class="cookie-banner__title" id="cookie-title">I cookie, in breve</p>
-    <p class="cookie-banner__text">Li usiamo con Shopify e i nostri partner per mostrarti i capi giusti, misurare le visite e gli annunci. <a href="gdpr-privacy-policy-1.html" >Informativa</a></p>
-    <button type="button" class="button button--primary cookie-banner__accept" data-cookie="accept">Accetta e continua</button>
-    <p class="cookie-banner__more"><button type="button" data-cookie="prefs">Preferenze</button><span aria-hidden="true"> · </span><button type="button" data-cookie="reject">Rifiuta</button></p>
+    <p class="cookie-banner__title" id="cookie-title">Consenso ai cookie</p>
+    <p class="cookie-banner__text" data-store-copy>Noi e i nostri partner, incluso Shopify, utilizziamo cookie e altre tecnologie per personalizzare la tua esperienza, mostrarti annunci ed eseguire analisi. Non utilizzeremo cookie o altre tecnologie per questi scopi senza il tuo consenso. Scopri di più nella nostra <a href="gdpr-privacy-policy-1.html" >Informativa sulla privacy</a></p>
+    <button type="button" class="button button--primary cookie-banner__accept" data-cookie="accept">Accetta</button>
+    <p class="cookie-banner__more"><button type="button" data-cookie="prefs">Gestisci le preferenze</button><span aria-hidden="true"> · </span><button type="button" data-cookie="reject">Declina</button></p>
   </div>
   <form class="cookie-banner__prefs" data-cookie-prefs hidden>
     <p class="cookie-banner__title">Le tue preferenze</p>

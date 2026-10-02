@@ -1,14 +1,15 @@
 // look-viewer.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- look viewer (assets/native-imm.js of the update): a look card opens the look over the page, the
    look page stays for the menu, the hero and the lookbook. Kept from live: the deck is the cards next to the
    one clicked, arrows and swipe move through it, each piece with its sizes, the look total and the saving, add
    all. Changed: a real dialog (focus moves in and comes back, Esc, Back closes it), sizes as chips with the
    sold-out ones marked (no extra confirmation popup), the add stays in the viewer instead of opening the
-   drawer, 14-day returns in the trust line (live says 15). Data: one file on the first open (live: one
-   /products/<handle>.js per piece). ---------- */
-let looks = null, loading = null, deck = [], at = 0, pushed = false, dialog = null;
+   drawer, 14-day returns in the trust line (live says 15). Each piece keeps live's own "+ Aggiungi" / "Avvisami",
+   "Guida taglie" and "Vedi prodotto", and gets "Non sei sicuro della tua taglia?"; the size dialogs (size-help.js)
+   open over the viewer. Data: one file on the first open (live: one /products/<handle>.js per piece). ---------- */
+let looks = null, loading = null, deck = [], at = 0, pushed = false, landed = false, dialog = null;
   const icon = n => `<svg class="icon" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const load = () => loading || (loading = new Promise((res, rej) => {
     if (window.SKS_LOOKS) return res(window.SKS_LOOKS);
@@ -44,43 +45,67 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, dialog = nu
     </div>`;
     document.body.append(dialog);
     dialog.addEventListener('click', onClick);
-    dialog.addEventListener('change', e => { if (e.target.matches('[data-lv-size]')) { e.target.closest('[data-lv-piece]').classList.remove('is-missing'); sync(); } });
+    dialog.addEventListener('change', e => { if (e.target.matches('[data-lv-size]')) { const li = e.target.closest('[data-lv-piece]'); li.classList.remove('is-missing'); syncPiece(li); sync(); } });
+    // the size advisor added the size it advised
+    dialog.addEventListener('size-help:added', e => { e.target.closest('[data-lv-piece]')?.classList.add('is-added'); sync(); });
     dialog.addEventListener('keydown', e => {
       if (e.target.matches('input, textarea')) return;
       if (e.key === 'ArrowLeft' && !e.target.matches('[type=radio]')) { e.preventDefault(); step(-1); }
       if (e.key === 'ArrowRight' && !e.target.matches('[type=radio]')) { e.preventDefault(); step(1); }
     });
-    dialog.addEventListener('close', () => { if (pushed) { pushed = false; history.back(); } });
+    dialog.addEventListener('close', () => {
+      $$('dialog[data-size-help-dialog][open]').forEach(closeDialog);
+      if (pushed) { pushed = false; history.back(); }
+      else if (landed) { landed = false; if (urlWritable()) history.replaceState(null, '', location.pathname + location.search); }
+    });
     // a horizontal swipe on the photo moves through the deck
     const media = $('[data-lv-media]', dialog);
     let x0 = null;
     media.addEventListener('pointerdown', e => { x0 = e.clientX; });
     media.addEventListener('pointerup', e => { if (x0 !== null && Math.abs(e.clientX - x0) > 50) step(e.clientX < x0 ? 1 : -1); x0 = null; });
   }
+  const ONE = /^(t\.?u\.?|tu|unica|os)$/i, esc = s => SKS_FMT.esc(s);
+  // each piece as the look page draws it: every size can be picked (a sold-out one is for "Avvisami"), the size
+  // guide and advisor (size-help.js), its own "Aggiungi" or "Avvisami", "Vedi prodotto"
   const pieceRow = (p, i) => {
-    const avail = p.sizes.filter(s => s[1]);
-    const one = p.sizes.length === 1 && avail.length === 1;
     const url = `${BASE}products/${encodeURIComponent(p.handle)}.html`;
+    const gone = !p.sizes.length, avail = p.sizes.some(s => s[1]);
     const price = p.compareAt > p.price
       ? `<span class="price price--sale">${SKS_FMT.money(p.price)}</span> <s class="price price--compare">${SKS_FMT.money(p.compareAt)}</s>`
       : `<span class="price">${SKS_FMT.money(p.price)}</span>`;
-    return `<li class="look-viewer__piece" data-lv-piece="${i}">
+    const chip = ([l, a], one) => `<label class="size-chip${a ? '' : ' is-sold'}${one ? ' is-single' : ''}"><input type="radio" name="lv-size-${i}" value="${esc(l)}" data-lv-size${one ? ' checked' : ''}${a ? '' : ' data-sold'}><span>${one && ONE.test(l) ? 'Taglia unica' : esc(l)}</span>${a ? '' : '<span class="visually-hidden"> esaurita</span>'}</label>`;
+    const sizes = p.sizes.length === 1 ? `<div class="look-viewer__sizes">${chip(p.sizes[0], true)}</div>`
+      : `<fieldset class="look-viewer__sizes"><legend class="visually-hidden">Taglia di ${esc(p.title)}</legend>${p.sizes.map(s => chip(s, false)).join('')}</fieldset>`;
+    const view = label => `<a class="link-arrow look-viewer__view" href="${url}"><span>${label}</span> ${icon('arrow-right')}</a>`;
+    return `<li class="look-viewer__piece${avail ? '' : gone ? ' is-gone' : ' is-soldout'}" data-lv-piece="${i}"${gone ? '' : ` data-size-fit="${esc(JSON.stringify(p))}"`}>
       <a class="look-viewer__thumb" href="${url}" tabindex="-1" aria-hidden="true"><img src="${SKS_FMT.cdn(p.image, 160, 200)}" alt="" width="80" height="100" loading="lazy"></a>
       <div class="look-viewer__info">
-        <p class="look-viewer__brand" translate="no">${SKS_FMT.esc(p.brand)}</p>
-        <p class="look-viewer__name"><a href="${url}">${SKS_FMT.esc(p.title)}</a></p>
+        <p class="look-viewer__brand" translate="no">${esc(p.brand)}</p>
+        <p class="look-viewer__name"><a href="${url}">${esc(p.title)}</a></p>
         <p class="look-viewer__price">${price}</p>
-        ${!avail.length ? `<p class="look-viewer__sold">Esaurito <button type="button" class="link-small" data-lv-notify>${icon('bell')} Avvisami</button></p>`
-        : one ? `<p class="meta">Taglia ${SKS_FMT.esc(SKS_FMT.sizeLabel(p.sizes[0][0]))}</p><input type="hidden" data-lv-size value="${SKS_FMT.esc(p.sizes[0][0])}">`
-        : `<fieldset class="look-viewer__sizes"><legend class="visually-hidden">Taglia di ${SKS_FMT.esc(p.title)}</legend>${p.sizes.map(([l, a]) =>
-            `<label class="size-chip${a ? '' : ' is-sold'}"><input type="radio" name="lv-size-${i}" value="${SKS_FMT.esc(l)}" data-lv-size${a ? '' : ' disabled'}><span>${SKS_FMT.esc(l)}</span>${a ? '' : '<span class="visually-hidden"> esaurita</span>'}</label>`).join('')}</fieldset>
-          <p class="look-viewer__hint" data-lv-hint>Scegli la taglia</p>`}
       </div>
-      <button type="button" class="icon-button look-viewer__wish" data-wish="${SKS_FMT.esc(p.handle)}" aria-pressed="false" aria-label="Salva ${SKS_FMT.esc(p.title)} nei preferiti">${icon('heart')}</button>
+      ${gone ? '' : `<button type="button" class="icon-button look-viewer__wish" data-wish="${esc(p.handle)}" aria-pressed="false" aria-label="Salva ${esc(p.title)} nei preferiti">${icon('heart')}</button>`}
+      <div class="look-viewer__buy">
+        ${gone ? `<p class="look-viewer__sold">Non più disponibile</p><div class="look-viewer__actions">${view('Vedi i simili')}</div>` : `${sizes}
+        <p class="look-viewer__hint" data-lv-hint>${avail ? 'Scegli la taglia' : 'Scegli la taglia da farti avvisare'}</p>
+        ${p.sizes.length > 1 ? `<p class="look-viewer__help"><button type="button" class="link-small" data-size-help="guide">${icon('ruler')} Guida taglie</button><button type="button" class="link-small product__size-help" data-size-help="advisor">${icon('hanger')}<span>Non sei sicuro della tua taglia?</span></button></p>` : ''}
+        <div class="look-viewer__actions">
+          <button type="button" class="button button--outline button--small look-viewer__add${avail ? '' : ' is-notify'}" data-piece-add data-added-label>${avail ? 'Aggiungi' : `${icon('bell')} Avvisami`}</button>
+          ${view('Vedi prodotto')}
+        </div>`}
+      </div>
     </li>`;
   };
+  // the piece's own button follows its size: sold out asks to be told, otherwise it adds
+  function syncPiece(li) {
+    const b = $('[data-piece-add]', li), input = li.querySelector('[data-lv-size]:checked');
+    if (!b || b.getAttribute('aria-busy') === 'true') return;
+    const notify = input ? 'sold' in input.dataset : li.classList.contains('is-soldout');
+    b.innerHTML = notify ? `${icon('bell')} Avvisami` : 'Aggiungi';
+    b.classList.toggle('is-notify', notify);
+  }
   const chosen = () => $$('[data-lv-piece]', dialog).map(li => {
-    const p = current().pieces[+li.dataset.lvPiece], input = li.querySelector('[data-lv-size]:checked, input[type=hidden][data-lv-size]');
+    const p = current().pieces[+li.dataset.lvPiece], input = li.querySelector('[data-lv-size]:checked:not([data-sold])');
     return { p, li, size: input ? input.value : null, buyable: p.sizes.some(s => s[1]) };
   });
   const current = () => looks[deck[at].id];
@@ -115,12 +140,22 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, dialog = nu
     if (deck.length < 2) return;
     at = (at + d + deck.length) % deck.length;
     render();
-    if (pushed) history.replaceState({ lookViewer: deck[at].id }, '', `#look-${deck[at].id}`);
+    if ((pushed || landed) && urlWritable()) history.replaceState({ lookViewer: deck[at].id }, '', `#look-${deck[at].id}`);
     announce(`${current().display}, look ${at + 1} di ${deck.length}`);
   }
   async function onClick(e) {
     if (e.target.closest('[data-lv-step]')) { step(+e.target.closest('[data-lv-step]').dataset.lvStep); return; }
-    if (e.target.closest('[data-lv-notify]')) { toast('Anteprima: sul sito ti avvisiamo quando torna disponibile.'); return; }
+    const one = e.target.closest('[data-piece-add]');
+    if (one) {
+      const li = one.closest('[data-lv-piece]'), p = current().pieces[+li.dataset.lvPiece], input = li.querySelector('[data-lv-size]:checked');
+      if (!input) { li.classList.add('is-missing'); (li.querySelector('[data-lv-size]:not([data-sold])') || li.querySelector('[data-lv-size]'))?.focus(); return; }
+      if ('sold' in input.dataset) { popups().then(m => m.open('notify', one, input.value)); return; }
+      await addWithFeedback(one, { handle: p.handle, title: p.title, brand: p.brand, price: p.price, compareAt: p.compareAt, image: p.image }, input.value, false);
+      li.classList.add('is-added');
+      $('[data-lv-status]', dialog).innerHTML = `${esc(p.title)}, taglia ${esc(input.value)}: nel carrello. <button type="button" class="link-small" data-open-dialog="cart-drawer">Vai al carrello</button>`;
+      setTimeout(() => syncPiece(li), 1900);
+      return;
+    }
     const add = e.target.closest('[data-lv-add]');
     if (!add) return;
     const rows = chosen(), ready = rows.filter(r => r.size);
@@ -136,7 +171,7 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, dialog = nu
     const left = rows.filter(r => r.buyable && !r.size).length;
     $('[data-lv-status]', dialog).innerHTML = `${ready.length === 1 ? 'Un capo aggiunto' : `${ready.length} capi aggiunti`} al carrello${left ? `, ${left === 1 ? 'uno' : left} senza taglia` : ''}. <button type="button" class="link-small" data-open-dialog="cart-drawer">Vai al carrello</button>`;
   }
-  export async function openLook(link) {
+  export async function openLook(link, { landed: arrived = false } = {}) {
     const scope = link.closest('section, .collection-page, main') || document;
     const cards = $$('[data-look-viewer]', scope);
     deck = cards.map(a => ({ id: a.dataset.lookViewer, href: a.getAttribute('href') }));
@@ -147,7 +182,9 @@ let looks = null, loading = null, deck = [], at = 0, pushed = false, dialog = nu
     at = Math.max(0, deck.findIndex(d => d.id === link.dataset.lookViewer));
     render();
     openDialog('look-viewer', link);
-    if (!pushed) { history.pushState({ lookViewer: deck[at].id }, '', `#look-${deck[at].id}`); pushed = true; }
+    // opened from a #look-<id> link: that entry is the look already; otherwise a new entry, so Back closes it
+    if (arrived) landed = true;
+    else if (!pushed && !landed && urlWritable()) { history.pushState({ lookViewer: deck[at].id }, '', `#look-${deck[at].id}`); pushed = true; }
   }
   // Back closes the viewer
   addEventListener('popstate', () => { if (dialog?.open) { pushed = false; closeDialog(dialog); } });

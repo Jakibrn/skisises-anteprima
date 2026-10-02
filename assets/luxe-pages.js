@@ -1,5 +1,5 @@
 // luxe-pages.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- cart page, checkout summary, wishlist, search results ---------- */
 (() => {
@@ -21,11 +21,12 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
       $('[data-wish-empty]').hidden = !!list.length;
       registerCards(list.map(x => ({ ...x, images: x.images || [] })));
       wg.innerHTML = list.map(x => {
-        // every size, the sold-out ones struck through with "Avvisami", as on the product page
+        // every size, the sold-out ones struck through with "Avvisami", as on the product page; the size chosen in
+        // the heart's modal comes preselected
         const all = x.sizes || [], sizes = all.filter(s => s[1]), sold = all.length - sizes.length;
         const card = SKS_CARD.render({ ...x, images: (x.images || []).filter(Boolean), sizes: [], swatches: [] }, { base: BASE });
         const buy = sizes.length
-          ? `<form class="wish-buy" data-wish-buy="${SKS_FMT.esc(x.handle)}" novalidate><fieldset class="look-sizes"><legend class="visually-hidden">Taglia</legend>${all.map(s => `<label class="look-size${s[1] ? '' : ' is-sold'}"><input type="radio" name="w-${SKS_FMT.esc(x.handle)}" value="${SKS_FMT.esc(s[0])}" ${s[1] ? (sizes.length === 1 ? 'checked' : '') : 'disabled'}><span>${SKS_FMT.esc(s[0])}</span></label>`).join('')}</fieldset><p class="field__error" data-wish-error hidden>Scegli una taglia.</p>${sold ? `<p class="meta">Taglia esaurita? <button type="button" class="link-small" data-wish-notify>Avvisami</button></p>` : ''}<button type="submit" class="button button--primary button--small">Aggiungi al carrello</button></form>`
+          ? `<form class="wish-buy" data-wish-buy="${SKS_FMT.esc(x.handle)}" novalidate><fieldset class="look-sizes"><legend class="visually-hidden">Taglia</legend>${all.map(s => `<label class="look-size${s[1] ? '' : ' is-sold'}"><input type="radio" name="w-${SKS_FMT.esc(x.handle)}" value="${SKS_FMT.esc(s[0])}" ${s[1] ? (sizes.length === 1 || s[0] === x.size ? 'checked' : '') : 'disabled'}><span>${SKS_FMT.esc(s[0])}</span></label>`).join('')}</fieldset><p class="field__error" data-wish-error hidden>Scegli una taglia.</p>${sold ? `<p class="meta">Taglia esaurita? <button type="button" class="link-small" data-wish-notify>Avvisami</button></p>` : ''}<button type="submit" class="button button--primary button--small">Aggiungi al carrello</button></form>`
           : `<p class="meta wish-buy">Esaurito in tutte le taglie. <button type="button" class="link-small" data-wish-notify>Avvisami</button></p>`;
         return `<div class="wish-item">${card}${buy}</div>`;
       }).join('');
@@ -224,18 +225,33 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   });
 })();
 
-/* ---------- look page: each piece its size (chips), the button says how many it adds, added rows are marked ---------- */
+/* ---------- look page: each piece its size (chips) and its own button, "Aggiungi" or, on a sold-out size,
+   "Avvisami" (as outfit-product-card.liquid); "Aggiungi tutto" says how many it adds; added rows are marked ---------- */
 (() => {
   const form = $('[data-look-form]');
   if (!form) return;
   const btn = $('[data-add-look]', form), status = $('[data-look-status]', form);
-  if (!btn) return; // every piece is sold out: the page says so, nothing to add
   const rows = () => $$('[data-piece]', form).filter(li => !li.classList.contains('is-unavailable'));
-  const chosen = li => (li.querySelector('input[type="radio"]:checked') || {}).value;
+  // only an available size counts: a sold-out pick is for "Avvisami"
+  const chosen = li => (li.querySelector('input[type="radio"]:checked:not([data-sold])') || {}).value;
   const pending = () => rows().filter(li => chosen(li) && li.dataset.added !== chosen(li));
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const bell = '<svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>';
+  // the piece's own button follows its size: sold out asks to be told, otherwise it adds
+  function syncPiece(li) {
+    const b = $('[data-piece-add]', li), input = li.querySelector('input[type="radio"]:checked');
+    if (!b || b.getAttribute('aria-busy') === 'true') return;
+    const notify = input ? 'sold' in input.dataset : li.classList.contains('is-soldout');
+    b.innerHTML = notify ? `${bell} Avvisami` : 'Aggiungi';
+    b.classList.toggle('is-notify', notify);
+  }
+  function mark(li, size) {
+    li.dataset.added = size; li.classList.add('is-added');
+    const t = li.querySelector('.look-piece__title'); if (t) t.dataset.added = size;
+  }
   function sync() {
-    const p = pending(), missing = rows().filter(li => !chosen(li)).length;
+    if (!btn) return; // every piece is sold out: the page says so, nothing to add in one go
+    const p = pending(), missing = rows().filter(li => !chosen(li) && !li.dataset.added).length;
     const changes = p.filter(li => li.dataset.added).length, adds = p.length - changes, someAdded = rows().some(li => li.dataset.added);
     btn.disabled = !p.length;
     btn.textContent = p.length
@@ -246,7 +262,35 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
       : someAdded ? `Scegli la taglia ${missing === 1 ? 'del capo rimanente' : `dei ${missing} capi rimanenti`}` : 'Scegli le taglie';
     if (status && !status.dataset.sticky) status.textContent = missing ? `${plural(missing, 'capo', 'capi')} senza taglia: ${missing === 1 ? 'sceglila per aggiungerlo' : 'sceglila per aggiungerli'}.` : 'Tutte le taglie scelte.';
   }
-  form.addEventListener('change', () => { if (status) delete status.dataset.sticky; sync(); });
+  form.addEventListener('change', e => {
+    const li = e.target.closest('[data-piece]');
+    if (li) { syncPiece(li); const h = $('[data-piece-hint]', li); if (h) h.hidden = true; li.classList.remove('is-missing'); }
+    if (status) delete status.dataset.sticky;
+    sync();
+  });
+  // one piece: its size, or the hint; a sold-out size opens the back-in-stock request
+  form.addEventListener('click', async e => {
+    const b = e.target.closest('[data-piece-add]');
+    if (!b) return;
+    const li = b.closest('[data-piece]'), input = li.querySelector('input[type="radio"]:checked');
+    if (!input) {
+      li.classList.add('is-missing'); $('[data-piece-hint]', li).hidden = false;
+      (li.querySelector('input[type="radio"]:not([data-sold])') || li.querySelector('input[type="radio"]'))?.focus();
+      return;
+    }
+    if ('sold' in input.dataset) { popups().then(m => m.open('notify', b, input.value)); return; }
+    const info = infoFromCard(li.dataset.piece), size = input.value;
+    if (!info) return;
+    // the same piece in another size: that line is replaced, never doubled
+    if (li.dataset.added && li.dataset.added !== size) Cart.remove(info.handle + '|' + li.dataset.added);
+    await addWithFeedback(b, info, size, false);
+    mark(li, size);
+    if (status) { status.dataset.sticky = '1'; status.textContent = `${info.title}, taglia ${size}: nel carrello.`; }
+    sync();
+    setTimeout(() => syncPiece(li), 1900); // after the shared "Aggiunto" feedback restores its label
+  });
+  // the size advisor added the size it advised
+  form.addEventListener('size-help:added', e => { const li = e.target.closest('[data-piece]'); if (li) { mark(li, e.detail.size); sync(); } });
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const add = pending();
@@ -257,8 +301,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     const [first, ...rest] = items;
     for (const [info, size] of rest) Cart.add(info, size);
     await addWithFeedback(btn, first[0], first[1]);
-    for (const [, size, li] of items) { li.dataset.added = size; li.classList.add('is-added'); const t = li.querySelector('.look-piece__title'); if (t) t.dataset.added = size; }
-    const missing = rows().filter(li => !chosen(li)).length, added = items.length - changed.length;
+    for (const [, size, li] of items) mark(li, size);
+    const missing = rows().filter(li => !chosen(li) && !li.dataset.added).length, added = items.length - changed.length;
     if (status) {
       status.dataset.sticky = '1';
       status.textContent = [added ? `${plural(added, 'capo aggiunto', 'capi aggiunti')} al carrello.` : '', changed.length ? `${changed.length === 1 ? 'Taglia cambiata' : `${changed.length} taglie cambiate`} nel carrello.` : '', missing ? `${plural(missing, 'capo', 'capi')} senza taglia.` : ''].filter(Boolean).join(' ');
@@ -267,6 +311,25 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     setTimeout(sync, 1900); // after the shared "Aggiunto" feedback restores its label
   });
   sync();
+})();
+
+/* ---------- design proposals (prototype only): "Altri look" as the current rail or as polaroids; the pick is
+   remembered in this browser and travels in the link (?stile=polaroid) ---------- */
+(() => {
+  const box = $('[data-looks-style]'), sw = $('[data-proto-switch]');
+  if (!box || !sw) return;
+  const set = (style, save) => {
+    box.classList.toggle('is-polaroid', style === 'polaroid');
+    $$('[data-style]', sw).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.style === style)));
+    if (!save) return;
+    store.set('sks-proto-looks-style', style);
+    const u = new URL(location.href);
+    style ? u.searchParams.set('stile', style) : u.searchParams.delete('stile');
+    history.replaceState(history.state, '', u);
+  };
+  const fromUrl = new URLSearchParams(location.search).get('stile');
+  set(fromUrl ?? store.get('sks-proto-looks-style', ''), false);
+  sw.addEventListener('click', e => { const b = e.target.closest('[data-style]'); if (b) set(b.dataset.style, true); });
 })();
 
 /* ---------- storia: one pinned timeline, the year column and the ski track in the same scroll() ---------- */

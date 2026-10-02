@@ -1,5 +1,5 @@
 // luxe-product.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, trackEvent, Wish, renderWishState, Recent, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- product page ---------- */
 (() => {
@@ -39,7 +39,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     toggle?.setAttribute('aria-expanded', 'false');
     if (focusBack) toggle?.focus();
   };
-  const notify = (size, opener) => { const l = $('[data-notify-label]'); if (l) l.textContent = size; openDialog('notify-dialog', opener); };
+  // back in stock: the app's product-page popup (popups.js)
+  const notify = (size, opener) => popups().then(m => m.open('notify', opener, size));
   toggle?.addEventListener('click', () => (sheet.hidden ? openSheet(false) : closeSheet(true)));
   sheet?.addEventListener('click', e => {
     if (e.target.closest('[data-sticky-close]')) { closeSheet(true); return; }
@@ -69,7 +70,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
       form.querySelector('.size-picker').classList.remove('is-invalid');
       carrySize(r.value);
       // the size lives in the URL: Back and reload keep it (bfcache or not)
-      const u = new URL(location.href); u.searchParams.set('taglia', r.value); history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+      const u = new URL(location.href); u.searchParams.set('taglia', r.value); if (urlWritable()) history.replaceState(history.state, '', u.pathname + u.search + u.hash);
     };
     form.addEventListener('change', e => { if (e.target.name === 'size') onSize(e.target); });
     addEventListener('pageshow', () => { const r = form.querySelector('input[name="size"]:checked'); if (r) onSize(r); });
@@ -105,9 +106,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     // sold-out sizes: back-in-stock request (the app's button in the theme)
     form.addEventListener('click', e => {
       const n = e.target.closest('[data-notify-size]');
-      if (!n) return;
-      $('[data-notify-label]').textContent = n.dataset.notifySize;
-      openDialog('notify-dialog', n);
+      if (n) notify(n.dataset.notifySize, n);
     });
   }
 
@@ -131,7 +130,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   // delivery window: 1-3 working days from the next working day, in Italian
   const d = $('[data-delivery]');
   if (d) {
-    d.textContent = deliveryWindow();
+    d.textContent = deliveryWindow({ day: '2-digit', month: '2-digit' }, 'il '); // the live line: "tra il 05/10 e il 07/10"
     const copy = $('[data-delivery-copy]'); if (copy) copy.textContent = d.textContent;
   }
 
@@ -140,8 +139,8 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
   const shipLine = () => {
     if (!ship) return;
     const total = Cart.subtotal() + (Cart.lines.some(l => l.handle === P.handle) ? 0 : P.price);
-    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong> in Italia per questo ordine'
-      : `Spedizione 5,90&nbsp;€ in Italia: <strong>ti mancano ${SKS_FMT.money(50 - total)}</strong> per averla gratis`;
+    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong>'
+      : `Spedizione gratuita in Italia per ordini superiori a €50: <strong>ti mancano ${SKS_FMT.money(50 - total)}</strong>`;
   };
   shipLine();
   document.addEventListener('cart:rendered', shipLine);
@@ -203,118 +202,7 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
 
 
 
-/* ---------- "Non sei sicuro della tua taglia?": the size-suggestions modal (integrated1 sizesuggestions) ----
-   Live: two steps (usual size, height, weight; then body, belly, age, fit), then POST /api/recommend and
-   "La tua taglia consigliata" with a compatibility score. The preview estimates on the device with the same
-   inputs: chest from height and weight, the fit offsets the live info page states (slim -3 cm, relaxed
-   +4 cm), the brand table when the service has one, else a generic table. Inputs stay in this browser. */
-(() => {
-  const form = $('[data-size-advisor]');
-  const pj = $('#product-json');
-  if (!form || !pj) return;
-  const P = JSON.parse(pj.textContent);
-  const KEY = 'sks-fit';
-  const shoes = form.dataset.kind === 'shoes', female = form.dataset.gender === 'F';
-  const steps = $$('[data-sz-step]', form), result = $('[data-sz-result]', form), err = $('[data-sz-error]', form);
-  const bars = $$('.sz-progress span', form);
-  // generic body-chest tables (cm) when the brand has none in the size service
-  const GENERIC = female
-    ? [['XS', 78, 82], ['S', 82, 86], ['M', 86, 92], ['L', 92, 98], ['XL', 98, 104], ['XXL', 104, 110]]
-    : [['XS', 84, 88], ['S', 88, 94], ['M', 94, 100], ['L', 100, 106], ['XL', 106, 112], ['XXL', 112, 118]];
-  const chart = form.dataset.chart ? JSON.parse(form.dataset.chart) : GENERIC;
-  // Italian numeric sizes some brands use instead of letters
-  const IT = female ? { XS: '38', S: '40', M: '42', L: '44', XL: '46', XXL: '48' } : { XS: '44', S: '46', M: '48', L: '50', XL: '52', XXL: '54' };
-  const saved = store.get(KEY, {});
-  const state = { usual: saved.usual ?? null, body: saved.body || 'regular', belly: saved.belly || 'average', age: saved.age || '26-40', fit: saved.fit || 'regular' };
-  if (saved.height) form.height && (form.height.value = saved.height);
-  if (saved.weight) form.weight && (form.weight.value = saved.weight);
-  const press = (grp, val) => $$(`[data-grp="${grp}"]`, form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.val === val)));
-  ['body', 'belly', 'age', 'fit'].forEach(g => press(g, state[g]));
-  if (state.usual != null) $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.usual === state.usual)));
-
-  function show(n) {
-    steps.forEach(s => { s.hidden = s.dataset.szStep !== String(n); });
-    result.hidden = n !== 'result';
-    bars.forEach((b, i) => b.classList.toggle('is-active', n === 'result' || i === n - 1));
-  }
-  function fail(msg, field) { err.textContent = msg; err.hidden = false; field?.focus(); }
-  const sizeOf = label => P.sizes.find(s => s[0] === label) || P.sizes.find(s => s[0] === IT[label]);
-
-  function estimate() {
-    if (shoes) {
-      const n = state.usual;
-      return { size: n, pct: form.ref_brand.value === 'Non lo so' ? 72 : 84, basis: `il tuo numero abituale${form.ref_brand.value !== 'Non lo so' ? ` in ${form.ref_brand.value}` : ''}` };
-    }
-    const h = +form.height.value, w = +form.weight.value;
-    // chest from height and weight (fitted on ANSUR-like averages), then body, belly and fit
-    let chest = 0.5 * w + 0.25 * h + (female ? 6 : 15);
-    chest += { slim: -2, regular: 0, curvy: 3 }[state.body] + { flat: -1, average: 0, round: 2 }[state.belly];
-    chest += { slim: -3, regular: 0, relaxed: 4 }[state.fit];
-    let i = chart.findIndex(([, lo, hi]) => chest >= lo && chest < hi);
-    if (i < 0) i = chest < chart[0][1] ? 0 : chart.length - 1;
-    const u = chart.findIndex(r => r[0] === state.usual);
-    if (u >= 0 && Math.abs(u - i) === 1) i = Math.round((i + u) / 2 + (state.fit === 'relaxed' ? 0.25 : -0.25)); // the usual size weighs in
-    const [label, lo, hi] = chart[i];
-    const mid = (lo + hi) / 2, half = (hi - lo) / 2;
-    const off = Math.min(1.5, Math.abs(chest - mid) / half);
-    const pct = Math.round(Math.max(45, 96 - off * 30 - (state.usual ? 0 : 6)));
-    return { size: label, pct, basis: `altezza ${h} cm, peso ${w} kg${state.usual ? `, taglia abituale ${state.usual}` : ''}` };
-  }
-
-  function render(r) {
-    const s = sizeOf(r.size);
-    const label = s ? s[0] : r.size;
-    const note = r.pct >= 90 ? 'misure al centro della taglia' : r.pct >= 70 ? 'buona vestibilità' : r.pct >= 50 ? 'valuta anche la taglia vicina' : 'stima indicativa';
-    const dots = '●'.repeat(Math.round(r.pct / 25)).padEnd(4, '○');
-    result.innerHTML = `<p class="sz-result__label">La tua taglia consigliata</p>
-      <p class="sz-result__size">${SKS_FMT.esc(label)}</p>
-      <p class="sz-result__conf"><span aria-hidden="true">${dots}</span> Compatibilità ${r.pct}%: ${note}</p>
-      ${s && !s[1] ? `<p class="sz-result__warn">La taglia consigliata per te è ${SKS_FMT.esc(label)}, ma non è disponibile in questo colore.</p>
-        <button type="button" class="button button--outline button--block" data-sz-notify="${SKS_FMT.esc(label)}">Avvisami quando torna la ${SKS_FMT.esc(label)}</button>`
-      : s ? `<button type="button" class="button button--primary button--block" data-sz-add="${SKS_FMT.esc(label)}">Aggiungi la ${SKS_FMT.esc(label)} al carrello</button>`
-      : `<p class="sz-result__warn">Questo modello non ha la ${SKS_FMT.esc(label)}: guarda le taglie disponibili o chiedici un consiglio.</p>`}
-      <p class="meta">Basato su: ${SKS_FMT.esc(r.basis)}.</p>
-      <p><button type="button" class="link-small" data-sz-restart>Rifai il test</button></p>`;
-    show('result');
-    result.querySelector('button')?.focus();
-  }
-
-  form.addEventListener('click', e => {
-    const u = e.target.closest('[data-usual]');
-    if (u) { state.usual = u.dataset.usual; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b === u))); err.hidden = true; return; }
-    const g = e.target.closest('[data-grp]');
-    if (g) { state[g.dataset.grp] = g.dataset.val; press(g.dataset.grp, g.dataset.val); return; }
-    if (e.target.closest('[data-sz-next]')) {
-      err.hidden = true;
-      if (shoes) { if (!state.usual) return fail('Scegli il numero che porti di solito.', $('[data-usual]', form)); store.set(KEY, { ...store.get(KEY, {}), usual: state.usual }); return render(estimate()); }
-      const h = +form.height.value, w = +form.weight.value;
-      if (!(h >= 100 && h <= 250)) return fail('Scrivi l’altezza in centimetri, per esempio 175.', form.height);
-      if (!(w >= 30 && w <= 250)) return fail('Scrivi il peso in chili, per esempio 70.', form.weight);
-      show(2); $('[data-sz-step="2"] .sz-chip[aria-pressed="true"]', form)?.focus(); return;
-    }
-    if (e.target.closest('[data-sz-back]')) { show(1); return; }
-    if (e.target.closest('[data-sz-restart]')) { show(1); return; }
-    if (e.target.closest('[data-sz-forget]')) { store.set(KEY, {}); form.reset(); state.usual = null; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', 'false')); show(1); toast('Dati della taglia cancellati da questo browser.'); return; }
-    const how = e.target.closest('[data-sz-how]');
-    if (how) { const box = $('#sz-how'); box.hidden = !box.hidden; how.setAttribute('aria-expanded', String(!box.hidden)); return; }
-    const add = e.target.closest('[data-sz-add]');
-    if (add) {
-      // the buy box takes the size too, so the page and the cart agree
-      const r = $$('input[name="size"]').find(i => i.value === add.dataset.szAdd);
-      if (r && !r.checked) r.click();
-      addWithFeedback(add, { handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, image: P.image }, add.dataset.szAdd);
-      return;
-    }
-    const nt = e.target.closest('[data-sz-notify]');
-    if (nt) { closeDialog(form.closest('dialog')); const l = $('[data-notify-label]'); if (l) l.textContent = nt.dataset.szNotify; setTimeout(() => openDialog('notify-dialog'), 340); }
-  });
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    store.set(KEY, { usual: state.usual, height: form.height?.value, weight: form.weight?.value, body: state.body, belly: state.belly, age: state.age, fit: state.fit });
-    render(estimate());
-  });
-  form.closest('dialog')?.addEventListener('dialog:open', () => { err.hidden = true; if (!result.hidden) return; show(1); });
-})();
+/* the size advisor itself is in size-help.js (89-size-help.js), loaded on the first click */
 
 /* ---------- size-help nudge (assets/size-help-nudge.js): after three different sizes, from the picker or the
    sticky bar, once per product per session. A line under the sizes, not the live modal: it never covers the
