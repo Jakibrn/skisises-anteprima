@@ -1531,6 +1531,49 @@ html:not(.reduce-motion) .not-found__track path + path { animation-delay: 160ms;
 /* while the bar's sizes are open, the floating buttons step aside instead of covering the first sizes */
 body:has([data-sticky-sheet]:not([hidden])) :is(.preview-chip, .wa-btn, .nl-teaser, .comment-fab) { opacity: 0; visibility: hidden; pointer-events: none; }
 
+/* the live gender pills (custom.genere quick filters): male sign on blue, female sign on pink, as the theme */
+ul.audience-pills { display: flex; flex-wrap: wrap; gap: var(--s2); padding-bottom: var(--s4); margin-bottom: var(--s4); border-bottom: 1px solid var(--line); }
+.audience-pill { --pill: #e6f1ff; --pill-ink: #1d4f91; display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 var(--s4) 0 6px; border-radius: 999px; border: 1.5px solid transparent; background: var(--pill); color: var(--ink); font-size: var(--fs-sm); font-weight: 600; transition: border-color var(--d-160) var(--ease-out), box-shadow var(--d-160) var(--ease-out); }
+.audience-pill--f { --pill: #fde7ef; --pill-ink: #9b2d55; }
+.audience-pill__icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / .7); color: var(--pill-ink); }
+.audience-pill__icon .icon { width: 18px; height: 18px; stroke-width: 1.8; }
+.audience-pill .chip__count { font-weight: 500; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.audience-pill:hover { border-color: color-mix(in srgb, var(--pill-ink) 45%, transparent); }
+.audience-pill[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 6px 16px -8px rgb(18 24 19 / .35); }
+.audience-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- FAQ (app block, FAQ page, articles) ---------- */
+.faq-block__more { margin-top: var(--s3); }
+.faq-block__group { margin: var(--s7) 0 var(--s3); font-family: var(--font-text); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0; color: var(--ink-2); }
+.faq-more { margin-top: var(--s3); }
+.faq-links { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.faq-links .chip { text-decoration: none; }
+.accordion__body table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.accordion__body th, .accordion__body td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.accordion__body th { font-weight: 600; color: var(--ink); }
+.accordion__body ol, .accordion__body ul { padding-left: 1.2em; }
+.accordion__body li + li { margin-top: 4px; }
+.accordion__body a { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+.faq-page__grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(var(--s6), 5vw, var(--s9)); align-items: start; }
+.faq-page__head { display: grid; gap: var(--s4); }
+.faq-page__summary { padding: var(--s4) var(--s5); background: var(--lichen); font-size: var(--fs-sm); color: var(--ink-2); max-width: 52ch; }
+.faq-page__summary strong { color: var(--ink); }
+.faq-page__search { display: flex; align-items: center; gap: var(--s2); max-width: 420px; min-height: 48px; padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: 999px; background: var(--snow); }
+.faq-page__search:focus-within { border-color: var(--ink); outline: 2px solid var(--focus); outline-offset: 2px; }
+.faq-page__search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; outline: none; }
+.faq-page__search .icon { width: 20px; height: 20px; color: var(--ink-3); }
+.faq-page__topics .chips { flex-wrap: wrap; }
+.faq-page__group + .faq-page__group { margin-top: var(--s8); }
+.faq-page__group h2 { margin-bottom: var(--s3); scroll-margin-top: calc(var(--header-h) + var(--s5)); }
+.faq-page__none { padding: var(--s5); background: var(--lichen); }
+@media (max-width: 1023px) { .faq-page__grid { grid-template-columns: 1fr; } }
+.article-faq { margin-top: var(--s8); padding-top: var(--s6); border-top: 1px solid var(--line); }
+.article-faq dl { display: grid; gap: 0; margin-top: var(--s4); }
+.article-faq__item { padding: var(--s5) 0; border-bottom: 1px solid var(--line); }
+.article-faq dt { font-family: var(--font-display); font-size: var(--fs-d5); line-height: 1.25; margin-bottom: var(--s2); }
+.article-faq dd { margin: 0; color: var(--ink-2); }
+.article-faq dd > * + * { margin-top: 0.7em; }
+
 /* ================= MOTION (CSS first) =================
    Tokens in tokens.css. --m is 0 under reduced motion: movement collapses, fades stay.
    Hidden starting states exist only under html.motion-ready (set by luxe.js once it runs), so a page

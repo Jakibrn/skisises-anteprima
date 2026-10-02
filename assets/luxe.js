@@ -824,12 +824,17 @@ document.addEventListener('submit', e => {
   const V = facetValues();
   const priceMin = Math.floor(Math.min(...V.prices)), priceMax = Math.ceil(Math.max(...V.prices));
 
+  // the theme's gender pills (templates/collection.json): unisex counts for Uomo and Donna, junior unisex for
+  // Bambino and Bambina; "junior" (Bambini) takes every kid
+  const AUD = { uomo: ['uomo', 'unisex'], donna: ['donna', 'unisex'], bambino: ['bambino', 'junior'], bambina: ['bambina', 'junior'], junior: ['bambino', 'bambina', 'junior'] };
+  const forGender = (p, g) => !g || (AUD[g] || [g]).includes(p.audience || p.gender);
+  const GENDER_LABEL = { uomo: 'Uomo', donna: 'Donna', bambino: 'Bambino', bambina: 'Bambina', junior: 'Bambini' };
   function matches(p, skip) {
     if (skip !== 'brand' && state.brand.size && !state.brand.has(p.brand)) return false;
     if (skip !== 'size' && state.size.size && !p.sizes.some(([l, a]) => a && state.size.has(l))) return false;
     if (skip !== 'color' && state.color.size && !state.color.has(p.colorName)) return false;
     if (skip !== 'type' && state.type && p.type !== state.type) return false;
-    if (skip !== 'gender' && state.gender && !(p.gender === state.gender || (p.gender === 'unisex' && state.gender !== 'junior'))) return false;
+    if (skip !== 'gender' && !forGender(p, state.gender)) return false;
     if (state.sale && !p.compareAt) return false;
     if (state.min && p.price < state.min) return false;
     if (state.max && p.price > state.max) return false;
@@ -867,7 +872,7 @@ document.addEventListener('submit', e => {
       (sizes.length > 1 ? group('Taglia', `<div class="facet__sizes">${sizes.map(s => { const n = count('size', s); return `<label class="size-toggle"><input type="checkbox" data-f="size" value="${SKS_FMT.esc(s)}" ${state.size.has(s) ? 'checked' : ''} ${n ? '' : 'disabled'}><span>${SKS_FMT.esc(s)}</span></label>`; }).join('')}</div>`, true) : '') +
       (colors.length > 1 ? group('Colore', `<ul class="facet__list facet__list--colors" role="list">${colors.map(c => { const n = count('color', c); return `<li><label class="check"><input type="checkbox" data-f="color" value="${SKS_FMT.esc(c)}" ${state.color.has(c) ? 'checked' : ''} ${n ? '' : 'disabled'}><span class="swatch" style="--sw:${V.colors[c].hex}"></span><span>${SKS_FMT.esc(c)}</span><span class="check__n">${n}</span></label></li>`; }).join('')}</ul>`) : '') +
       group('Prezzo', `<div class="price-range"><label><span class="field__label">Da (€)</span><input class="field__input" type="number" inputmode="numeric" min="${priceMin}" max="${priceMax}" placeholder="${priceMin}" value="${state.min || ''}" data-f="min"></label><label><span class="field__label">A (€)</span><input class="field__input" type="number" inputmode="numeric" min="${priceMin}" max="${priceMax}" placeholder="${priceMax}" value="${state.max || ''}" data-f="max"></label></div>`) +
-      (new Set(data.map(p => p.gender)).size > 1 ? group('Genere', `<div class="facet__sizes">${[['', 'Tutti'], ['uomo', 'Uomo'], ['donna', 'Donna'], ['junior', 'Bambini']].filter(([g]) => !g || data.some(p => p.gender === g)).map(([g, l]) => `<label class="size-toggle"><input type="radio" name="f-genere" data-f="gender" value="${g}" ${state.gender === g ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`, true) : '') +
+      (['uomo', 'donna', 'bambino', 'bambina'].filter(g => data.some(p => forGender(p, g))).length > 1 ? group('Genere', `<div class="facet__sizes">${[['', 'Tutti'], ['uomo', 'Uomo'], ['donna', 'Donna'], ['bambino', 'Bambino'], ['bambina', 'Bambina']].filter(([g]) => !g || data.some(p => forGender(p, g))).map(([g, l]) => `<label class="size-toggle"><input type="radio" name="f-genere" data-f="gender" value="${g}" ${state.gender === g ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`, true) : '') +
       (data.some(p => p.compareAt) ? group('Saldi', `<label class="check"><input type="checkbox" data-f="sale" ${state.sale ? 'checked' : ''}><span>Solo capi in saldo</span><span class="check__n">${data.filter(p => p.compareAt).length}</span></label>`) : '');
   }
 
@@ -875,7 +880,7 @@ document.addEventListener('submit', e => {
     const chips = [];
     state.brand.forEach(v => chips.push(['brand', v, v])); state.size.forEach(v => chips.push(['size', v, `Taglia ${v}`])); state.color.forEach(v => chips.push(['color', v, v]));
     if (state.sale) chips.push(['sale', '', 'In saldo']);
-    if (state.gender) chips.push(['gender', '', { uomo: 'Uomo', donna: 'Donna', junior: 'Bambini' }[state.gender]]);
+    if (state.gender) chips.push(['gender', '', GENDER_LABEL[state.gender] || state.gender]);
     if (state.min || state.max) chips.push(['price', '', `${state.min || priceMin}–${state.max || priceMax} €`]);
     $('[data-applied]', root).innerHTML = chips.map(([k, v, l]) => `<li><button type="button" class="chip chip--remove" data-remove-f="${k}" data-v="${SKS_FMT.esc(v)}" aria-label="Togli il filtro ${SKS_FMT.esc(l)}">${SKS_FMT.esc(l)}<svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></li>`).join('');
     const n = activeCount();
@@ -903,7 +908,6 @@ document.addEventListener('submit', e => {
     $('[data-load-bar]', root).style.setProperty('--pct', Math.min(1, state.shown / Math.max(1, list.length)));
   }
 
-  const forGender = (p, g) => !g || p.gender === g || (p.gender === 'unisex' && g !== 'junior');
   function syncChipCounts() {
     $$('[data-type-chip]').forEach(c => {
       const t = c.dataset.typeChip, n = data.filter(p => matches(p, 'type') && (!t || p.type === t)).length;
@@ -970,7 +974,7 @@ document.addEventListener('submit', e => {
       update();
     }
     const gchip = e.target.closest('[data-gender-chip]');
-    if (gchip) { state.gender = gchip.dataset.genderChip; syncGenderChips(); state.shown = perPage; update(); return; }
+    if (gchip) { const g = gchip.dataset.genderChip; state.gender = g && state.gender === g && gchip.classList.contains('audience-pill') ? '' : g; syncGenderChips(); state.shown = perPage; update(); return; }
     const chip = e.target.closest('[data-type-chip]');
     if (chip) {
       state.type = chip.dataset.typeChip;
@@ -1414,6 +1418,35 @@ $$('[data-for-you]').forEach(sec => {
     const sizes = t.nextElementSibling, open = sizes.hidden;
     sizes.hidden = !open; t.setAttribute('aria-expanded', String(open));
     if (open) sizes.querySelector('button')?.focus();
+  });
+})();
+
+/* ---------- FAQ: "Mostra altre domande" (the app block shows five) and the FAQ page's search ---------- */
+document.addEventListener('click', e => {
+  const more = e.target.closest('[data-faq-more]');
+  if (!more) return;
+  const list = more.previousElementSibling;
+  const hidden = $$('[data-faq-more-item]', list);
+  hidden.forEach(d => { d.hidden = false; d.removeAttribute('data-faq-more-item'); });
+  hidden[0]?.querySelector('summary')?.focus();
+  more.remove();
+});
+
+(() => {
+  const input = $('[data-faq-search]');
+  if (!input) return;
+  const groups = $$('.faq-page__group'), none = $('[data-faq-none]');
+  const items = groups.flatMap(g => $$('details', g).map(d => ({ d, g, text: SKS_FMT.normalize(d.textContent) })));
+  let opened = [];
+  input.addEventListener('input', () => {
+    const words = SKS_FMT.normalize(input.value).split(' ').filter(w => w.length > 1);
+    opened.forEach(d => { d.open = false; }); opened = [];
+    let shown = 0;
+    items.forEach(({ d, text }) => { const ok = !words.length || words.every(w => text.includes(w)); d.hidden = !ok; if (ok) shown++; });
+    groups.forEach(g => { g.hidden = !$$('details', g).some(d => !d.hidden); });
+    none.hidden = shown > 0;
+    // a few matches open by themselves: the answer is what was searched for
+    if (words.length && shown <= 3) items.forEach(({ d }) => { if (!d.hidden) { d.open = true; opened.push(d); } });
   });
 })();
 
