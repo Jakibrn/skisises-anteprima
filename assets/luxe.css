@@ -512,15 +512,24 @@ product-card { display: block; position: relative; }
 .product-card__title a::after { content: ""; position: absolute; inset: 0; z-index: 0; }
 .product-card__colour { display: block; color: var(--ink-3); }
 .product-card .price-list { font-size: 0.9375rem; margin-top: 2px; }
-.product-card__swatches { display: flex; align-items: center; gap: 6px; margin-top: var(--s2); position: relative; z-index: 1; }
-.product-card__swatch-more { font-size: var(--fs-xs); color: var(--ink-3); }
 .product-card.is-archived .product-card__img { opacity: 0.55; }
-.swatch { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 1px rgb(19 25 20 / 0.18); position: relative; }
-.swatch.is-current::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; box-shadow: 0 0 0 1px var(--ink); }
-a.swatch::before { content: ""; position: absolute; inset: -14px -6px; }
-/* on touch screens the dots inform and a tap on them opens the product, like the rest of the card:
-   14px dots can't be 44px targets, so the row lets the tap through to the card's stretched link */
-@media (pointer: coarse) { .product-card__swatches { z-index: auto; pointer-events: none; } }
+/* colours (assets/card-color-swatches.css, restyled): 28px thumbnails of each colourway, the current one ringed;
+   always one row high, scrolling sideways when a model has many colours */
+.card-swatches-wrapper { height: 34px; margin: 2px 0 var(--s1); display: flex; align-items: center; position: relative; z-index: 1; }
+.card-swatches { display: flex; gap: 6px; max-width: 100%; overflow-x: auto; padding: 3px 2px; margin: 0; list-style: none; scrollbar-width: none; }
+.card-swatches::-webkit-scrollbar { display: none; }
+.card-swatches__link { position: relative; display: block; width: 28px; height: 28px; padding: 2px; border-radius: 50%; background: var(--snow); box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow var(--d-160) var(--ease-out); }
+.card-swatches__link img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; mix-blend-mode: multiply; }
+.card-swatches__link:hover, .card-swatches__link:focus-visible { box-shadow: inset 0 0 0 1px var(--ink-3); }
+.card-swatches__link.is-selected { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.card-swatches__link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* while a colour is previewed, the card shows that photo and not the hover one */
+.product-card.is-color-previewing .product-card__img--primary { opacity: 1 !important; }
+.product-card.is-color-previewing .product-card__img--secondary { opacity: 0 !important; }
+@media (max-width: 699px) { .card-swatches-wrapper { height: 32px; } .card-swatches { gap: 5px; } .card-swatches__link { width: 26px; height: 26px; } }
+/* the model's own rating, between name and price (the live card's Judge.me badge) */
+.product-card__rating { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.product-card__rating .rating-stars .icon { width: 14px; height: 14px; }
 
 .size-chip {
   min-width: 44px; min-height: 40px; padding: 0 var(--s3); border-radius: var(--radius); border: 1px solid var(--line-strong);
@@ -1054,8 +1063,12 @@ ul.type-tiles { display: flex; gap: var(--s3); overflow-x: auto; scrollbar-width
 .chip-rows > .type-chips:not(:last-child) { padding-bottom: var(--s3); }
 .toolbar { position: sticky; top: var(--header-h); z-index: 20; background: color-mix(in srgb, var(--stone) 94%, transparent); backdrop-filter: blur(10px); border-block: 1px solid var(--line); }
 .toolbar__inner { display: flex; align-items: center; gap: var(--s4); min-height: 60px; }
-.toolbar__filters { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; font-weight: 500; }
-.toolbar__count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 10px; background: var(--ink); color: var(--stone); font-size: 11px; font-weight: 700; }
+/* the filters button is the strongest thing in the toolbar (owner, 02/10): a filled pill with the count */
+.toolbar__filters { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 var(--s5) 0 var(--s4); border-radius: 999px; background: var(--green-800); color: var(--snow); font-weight: 600; box-shadow: 0 1px 2px rgb(19 25 20 / .18); transition: background-color var(--d-160) var(--ease-out); }
+.toolbar__filters:hover { background: color-mix(in srgb, var(--green-800) 86%, var(--ink)); }
+.toolbar__filters:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.toolbar__filters .icon { width: 20px; height: 20px; }
+.toolbar__count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--green-300); color: var(--forest-950); font-size: 11px; font-weight: 700; }
 .applied { display: flex; gap: var(--s2); flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .chip--remove { min-height: 34px; padding: 0 var(--s2) 0 var(--s3); gap: 4px; background: var(--snow); }
 .chip--remove .icon { width: 14px; height: 14px; }
@@ -1077,6 +1090,11 @@ ul.type-tiles { display: flex; gap: var(--s3); overflow-x: auto; scrollbar-width
   .density [data-density="4"] .icon { display: none; }
   .applied { display: none; }
   .toolbar__inner { gap: var(--s2); justify-content: space-between; }
+  /* the filters pill keeps its size; the sort menu gives way on narrow phones */
+  .toolbar__filters { flex: none; padding: 0 var(--s4) 0 var(--s3); }
+  .toolbar__sort { flex: 1 1 auto; min-width: 0; display: flex; justify-content: flex-end; }
+  .toolbar__sort select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+  .density { flex: none; }
 }
 .load-more { display: grid; justify-items: center; gap: var(--s3); padding-bottom: var(--section); }
 .load-more__bar { width: 200px; height: 2px; background: var(--line); }

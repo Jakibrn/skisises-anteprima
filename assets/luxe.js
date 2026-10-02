@@ -127,15 +127,28 @@ var SKS_CARD = (function (F) {
           }).join('') + '</div></div>';
       }
     }
+    // snippets/card-color-swatches.liquid (live): a thumbnail of each colour of the model, the current one marked;
+    // a pointer or focus on one shows its photo in the card (luxe.js), a click opens it. The row is always there,
+    // so brand, name and price line up across a grid row
     var swatches = '';
-    if (p.swatches && p.swatches.length) {
-      var shown = p.swatches.slice(0, 4);
-      swatches = '<ul class="product-card__swatches" role="list" aria-label="Altri colori">' +
-        '<li><span class="swatch is-current" style="--sw:' + (p.hex || '#ccc') + '" title="' + F.esc(t[1] || p.color || '') + '"></span></li>' +
-        shown.map(function (s) {
-          return '<li><a class="swatch" style="--sw:' + s[1] + '" href="' + base + 'products/' + encodeURIComponent(s[0]) + '.html" aria-label="' + F.esc(s[2]) + '" title="' + F.esc(s[2]) + '"></a></li>';
-        }).join('') +
-        (p.swatches.length > 4 ? '<li class="product-card__swatch-more">+' + (p.swatches.length - 4) + '</li>' : '') + '</ul>';
+    if (p.swatches && p.swatches.length > 1) {
+      swatches = '<ul class="card-swatches" role="list" aria-label="Colori disponibili">' + p.swatches.map(function (s) {
+        var cur = s[0] === p.handle, thumb = function (w) { return F.cdn(s[1], w, w); };
+        return '<li><a class="card-swatches__link' + (cur ? ' is-selected' : '') + '" href="' + base + 'products/' + encodeURIComponent(s[0]) + '.html"' +
+          ' data-preview-image="' + F.cdn(s[1], 720) + '" data-preview-srcset="' + F.esc(F.srcset(s[1], [360, 540, 720], 0, F.nativeWidth(s[1]))) + '"' +
+          (cur ? ' aria-current="true"' : '') + ' title="' + F.esc(s[2]) + '">' +
+          '<img src="' + thumb(96) + '" srcset="' + thumb(48) + ' 48w, ' + thumb(72) + ' 72w, ' + thumb(96) + ' 96w" sizes="28px" width="28" height="28" alt="' + F.esc(s[2] || 'Altro colore') + '" loading="lazy" decoding="async"></a></li>';
+      }).join('') + '</ul>';
+    }
+    // the model's own Judge.me rating (the product page's), as the live card's badge: stars and count
+    var rating = '';
+    if (p.rating) {
+      var v = p.rating[0], n = p.rating[1], txt = String(v.toFixed(1)).replace('.', ',');
+      var star5 = new Array(6).join('<svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>');
+      rating = '<p class="product-card__rating"><span class="rating-stars" style="--fill:' + (Math.round(v / 5 * 1000) / 10) + '%" aria-hidden="true">' +
+        '<span class="rating-stars__base">' + star5 + '</span><span class="rating-stars__fill">' + star5 + '</span></span>' +
+        '<span class="visually-hidden">Valutazione ' + txt + ' su 5, ' + n + (n === 1 ? ' recensione' : ' recensioni') + '</span>' +
+        '<span aria-hidden="true">' + txt + ' (' + n + ')</span></p>';
     }
     return '<product-card class="product-card' + (p.archived ? ' is-archived' : '') + '" data-handle="' + F.esc(p.handle) + '">' +
       '<div class="product-card__media" data-vt-media>' +
@@ -147,9 +160,10 @@ var SKS_CARD = (function (F) {
           '<svg class="icon" aria-hidden="true"><use href="#i-heart"/></svg></button>' + quick +
       '</div>' +
       '<div class="product-card__info">' +
+        '<div class="card-swatches-wrapper">' + swatches + '</div>' +
         '<p class="product-card__brand" translate="no">' + F.esc(p.brand) + '</p>' +
         '<h3 class="product-card__title"><a href="' + url + '"><span class="product-card__name">' + F.esc(t[0].replace(GENDER_WORD, ' $1')) + '</span>' + (t[1] ? '<span class="visually-hidden">, </span><span class="product-card__colour">' + F.esc(t[1]) + '</span>' : '') + '</a></h3>' +
-        priceHtml(p) + swatches +
+        rating + priceHtml(p) +
       '</div>' +
     '</product-card>';
   }
@@ -720,6 +734,40 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-proto-note]');
   if (b) toast(b.dataset.protoNote);
 });
+
+/* ---------- colour thumbnails on cards (assets/card-color-swatches.js): a pointer or focus on a colour shows its
+   photo in the card; leaving the card or the row puts the card's own photo back ---------- */
+(() => {
+  const saved = new WeakMap();
+  const primary = card => card && $('.product-card__img--primary', card);
+  function preview(link) {
+    const card = link.closest('product-card'), img = primary(card);
+    if (!img || !link.dataset.previewImage) return;
+    if (!saved.has(card)) saved.set(card, { src: img.getAttribute('src'), srcset: img.getAttribute('srcset') });
+    card.classList.add('is-color-previewing');
+    if (link.dataset.previewSrcset) img.setAttribute('srcset', link.dataset.previewSrcset); else img.removeAttribute('srcset');
+    img.setAttribute('src', link.dataset.previewImage);
+  }
+  function restore(card) {
+    const s = card && saved.get(card), img = primary(card);
+    if (!s || !img) return;
+    img.setAttribute('src', s.src);
+    if (s.srcset) img.setAttribute('srcset', s.srcset); else img.removeAttribute('srcset');
+    card.classList.remove('is-color-previewing');
+    saved.delete(card);
+  }
+  document.addEventListener('pointerover', e => { const l = e.target.closest('.card-swatches__link'); if (l && e.pointerType !== 'touch') preview(l); });
+  document.addEventListener('focusin', e => { const l = e.target.closest('.card-swatches__link'); if (l) preview(l); });
+  document.addEventListener('pointerout', e => {
+    const card = e.target.closest('product-card'), row = e.target.closest('.card-swatches-wrapper');
+    if (card && !card.contains(e.relatedTarget)) restore(card);
+    else if (row && !row.contains(e.relatedTarget)) restore(row.closest('product-card'));
+  });
+  document.addEventListener('focusout', e => {
+    const card = e.target.closest('product-card');
+    requestAnimationFrame(() => { if (card && !card.contains(document.activeElement)) restore(card); });
+  });
+})();
 
 /* ---------- luxe-motion: only the theme's Motion One (inView, scroll, animate) + CSS ---------- */
 (() => {
