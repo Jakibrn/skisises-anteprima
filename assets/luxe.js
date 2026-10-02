@@ -1,4 +1,4 @@
-// luxe.js: built 2026-10-01. Motion uses the theme's own vendor.min.js (Motion One).
+// luxe.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* Shared by the Node build (evaluated in a vm sandbox) and the browser bundle: no imports, no DOM. */
 var SKS_FMT = (function () {
@@ -35,7 +35,30 @@ var SKS_FMT = (function () {
   function normalize(s) {
     return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   }
-  return { esc: esc, money: money, cdn: cdn, srcset: srcset, nativeWidth: nativeWidth, sizeLabel: sizeLabel, percentOff: percentOff, normalize: normalize };
+  // The sale countdown of snippets/sale-countdown.liquid: with no date in the settings and no seasonal window
+  // (shop.metafields.custom.sale_window is {} on 02/10), the weekly reset, Monday at 23:59 in Rome (theme
+  // defaults sale_weekly_day 1, sale_weekly_time 23:59). Worked out from the Rome wall clock, as Liquid does.
+  function saleDeadline(now) {
+    now = now || Date.now();
+    var parts = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', weekday: 'short', hourCycle: 'h23' })
+      .formatToParts(now).forEach(function (x) { parts[x.type] = x.value; });
+    var local = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    var offset = local - Math.floor(now / 1000) * 1000;
+    var weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+    var midnight = Date.UTC(+parts.year, +parts.month - 1, +parts.day);
+    var target = midnight + ((1 - weekday + 7) % 7) * 86400000 + (23 * 3600 + 59 * 60) * 1000;
+    if (target <= local) target += 7 * 86400000;
+    return target - offset;
+  }
+  // days, hours and minutes while more than a day is left; hours, minutes and seconds in the last day
+  // (the theme's units: "g", "ore", "min", "sec")
+  function countdownParts(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000)), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+    return d >= 1 ? [[pad(d), 'g'], [pad(h), 'ore'], [pad(m), 'min']] : [[pad(h), 'ore'], [pad(m), 'min'], [pad(sec), 'sec']];
+  }
+  return { esc: esc, money: money, cdn: cdn, srcset: srcset, nativeWidth: nativeWidth, sizeLabel: sizeLabel, percentOff: percentOff, normalize: normalize, saleDeadline: saleDeadline, countdownParts: countdownParts };
 })();
 
 /* Product card markup, shared by the Node build and the browser (filters, search, wishlist,
@@ -382,7 +405,7 @@ function renderCart(newKey) {
     b.hidden = !count;
     const changed = b.dataset.n !== undefined && b.dataset.n !== String(count);
     b.dataset.n = count; b.textContent = count;
-    if (changed) { b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); }
+    if (changed) { b.classList.remove('is-bump'); void b.offsetWidth; b.classList.add('is-bump'); b.addEventListener('animationend', () => b.classList.remove('is-bump'), { once: true }); }
   });
   const text = $('[data-cart-count-text]'); if (text) text.textContent = count ? `(${count})` : '';
   const left = Math.max(0, FREE_SHIPPING - subtotal);
@@ -978,10 +1001,58 @@ document.addEventListener('submit', e => {
   const chosen = $('[data-size-chosen]'), error = $('[data-size-error]');
   const selected = () => form && (form.querySelector('input[name="size"]:checked') || {}).value;
 
+  // sticky bar sizes: the same sizes and counts as the picker above, kept in step both ways (as the theme's
+  // assets/sticky-atc-sync.js does with the app's select). A sold-out size opens the back-in-stock form.
+  const sheet = $('[data-sticky-sheet]'), toggle = $('[data-sticky-toggle]');
+  const stickyValue = $('[data-sticky-value]'), stickyCount = $('[data-sticky-count]'), stickyHint = $('[data-sticky-hint]');
+  const stickyPicks = $$('[data-sticky-pick]');
+  let pendingAdd = false;
+  const syncSticky = size => {
+    stickyPicks.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.stickyPick === size)));
+    const pick = stickyPicks.find(b => b.dataset.stickyPick === size);
+    if (stickyValue && pick) stickyValue.textContent = size;
+    if (stickyCount) stickyCount.textContent = pick ? (pick.querySelector('.size-option__stock') || {}).textContent || '' : '';
+  };
+  const openSheet = adding => {
+    if (!sheet) return;
+    pendingAdd = !!adding;
+    sheet.hidden = false;
+    toggle?.setAttribute('aria-expanded', 'true');
+    if (stickyHint) stickyHint.hidden = !adding;
+    (sheet.querySelector('[aria-pressed="true"]') || sheet.querySelector('.sticky-size'))?.focus();
+  };
+  const closeSheet = focusBack => {
+    if (!sheet || sheet.hidden) return;
+    sheet.hidden = true;
+    pendingAdd = false;
+    toggle?.setAttribute('aria-expanded', 'false');
+    if (focusBack) toggle?.focus();
+  };
+  const notify = (size, opener) => { const l = $('[data-notify-label]'); if (l) l.textContent = size; openDialog('notify-dialog', opener); };
+  toggle?.addEventListener('click', () => (sheet.hidden ? openSheet(false) : closeSheet(true)));
+  sheet?.addEventListener('click', e => {
+    if (e.target.closest('[data-sticky-close]')) { closeSheet(true); return; }
+    const pick = e.target.closest('[data-sticky-pick]');
+    if (pick) {
+      const size = pick.dataset.stickyPick, adding = pendingAdd;
+      const r = form && [...form.querySelectorAll('input[name="size"]')].find(i => i.value === size);
+      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+      closeSheet(!adding);
+      if (adding) addWithFeedback($('[data-sticky-add]'), info, size);
+      else announce(`Taglia ${size} scelta.`);
+      return;
+    }
+    const sold = e.target.closest('[data-notify-size]');
+    if (sold) { closeSheet(false); notify(sold.dataset.notifySize, toggle); }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet && !sheet.hidden) closeSheet(true); });
+  document.addEventListener('pointerdown', e => { if (sheet && !sheet.hidden && !e.target.closest('[data-sticky-atc]')) closeSheet(false); });
+
   // the chosen size travels to the other colours (?taglia=), so a colour switch never resets it silently
   const carrySize = size => $$('.sibling[href]').forEach(a => { const u = new URL(a.href); size ? u.searchParams.set('taglia', size) : u.searchParams.delete('taglia'); a.href = u.pathname.split('/').pop() + u.search; });
   if (form) {
     const onSize = r => {
+      syncSticky(r.value);
       if (chosen) { chosen.textContent = r.value; chosen.classList.remove('meta'); }
       error.hidden = true;
       form.querySelector('.size-picker').classList.remove('is-invalid');
@@ -1012,9 +1083,13 @@ document.addEventListener('submit', e => {
       addWithFeedback(form.querySelector('[data-add-to-cart]'), info, size);
     });
     $('[data-sticky-add]')?.addEventListener('click', e => {
+      const btn = e.currentTarget;
+      // every size sold out: pick the one to be told about (or straight to the form with one size)
+      if (btn.hasAttribute('data-sticky-notify')) { if (sheet) openSheet(false); else notify(P.sizes[0][0], btn); return; }
       const size = selected();
-      if (!size) { needSize(); return; }
-      addWithFeedback(e.currentTarget, info, size);
+      // no size yet: the sizes open on the bar itself, and the pick adds to the cart
+      if (!size) { if (sheet) openSheet(true); else needSize(); return; }
+      addWithFeedback(btn, info, size);
     });
     // sold-out sizes: back-in-stock request (the app's button in the theme)
     form.addEventListener('click', e => {
@@ -1029,11 +1104,16 @@ document.addEventListener('submit', e => {
   const sticky = $('[data-sticky-atc]'), main = $('[data-add-to-cart]');
   if (sticky && main) {
     sticky.hidden = false;
+    // the floating buttons sit above the bar, whatever its height (the sale strip makes it taller on phones)
+    const barHeight = () => ROOT.style.setProperty('--sticky-h', `${Math.ceil(sticky.getBoundingClientRect().height - parseFloat(getComputedStyle(sticky).paddingBottom)) + 24}px`);
+    barHeight();
+    addEventListener('resize', barHeight, { passive: true });
     new IntersectionObserver(([e]) => {
       const show = !e.isIntersecting && e.boundingClientRect.top < 0;
       sticky.classList.toggle('is-visible', show);
       sticky.setAttribute('aria-hidden', String(!show));
       sticky.inert = !show;
+      if (!show) closeSheet(false);
     }).observe(main);
   }
 
@@ -1071,6 +1151,31 @@ document.addEventListener('submit', e => {
       }), { passive: true });
       dots.forEach((d, k) => d.addEventListener('click', () => gallery.scrollTo({ left: k * gallery.clientWidth, behavior: MOTION_OK() ? 'smooth' : 'auto' })));
     }
+  }
+
+  // sale countdown (snippets/sale-countdown.liquid): one ticker for the line under the price and its copy in
+  // the sticky bar; days-hours-minutes, then hours-minutes-seconds in the last day. Past the deadline the timer
+  // goes and the sale line stays, as assets/sale-countdown.js does.
+  const timers = $$('[data-sale-timer]');
+  if (timers.length) {
+    const ends = SKS_FMT.saleDeadline(Date.now());
+    const label = 'L’offerta scade ' + new Date(ends).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    timers.forEach(t => t.setAttribute('aria-label', label));
+    let id = 0, step = 0;
+    const paint = () => {
+      const left = ends - Date.now();
+      if (left <= 0) { clearInterval(id); timers.forEach(t => t.remove()); return 0; }
+      const html = SKS_FMT.countdownParts(left).map(([v, u]) => `<span class="sale-line__part"><b>${v}</b> <span class="sale-line__unit">${u}</span></span>`).join(' ');
+      timers.forEach(t => { if (t.innerHTML !== html) t.innerHTML = html; });
+      return left < 86400000 ? 1000 : 30000;
+    };
+    const start = () => {
+      clearInterval(id);
+      step = paint();
+      if (step) id = setInterval(() => { const next = paint(); if (next !== step) start(); }, step);
+    };
+    start();
+    document.addEventListener('visibilitychange', () => (document.hidden ? clearInterval(id) : start()));
   }
 
   // recently viewed: shown under the product (the theme stored them without a section)
