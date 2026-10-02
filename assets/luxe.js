@@ -1,4 +1,4 @@
-// luxe.js: built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
+// luxe.js (core): built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* Shared by the Node build (evaluated in a vm sandbox) and the browser bundle: no imports, no DOM. */
 var SKS_FMT = (function () {
@@ -58,7 +58,10 @@ var SKS_FMT = (function () {
     var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
     return d >= 1 ? [[pad(d), 'g'], [pad(h), 'ore'], [pad(m), 'min']] : [[pad(h), 'ore'], [pad(m), 'min'], [pad(sec), 'sec']];
   }
-  return { esc: esc, money: money, cdn: cdn, srcset: srcset, nativeWidth: nativeWidth, sizeLabel: sizeLabel, percentOff: percentOff, normalize: normalize, saleDeadline: saleDeadline, countdownParts: countdownParts };
+  // Ski Sises Club (platform/apps/back-in-stock/app/modules/loyalty/math.ts): the Member level earns 3% of the paid
+  // product subtotal as point value, one point is worth 0,05 €
+  function clubPoints(eur) { return Math.floor(Math.floor(Math.round(eur * 100) * 300 / 10000) / 5); }
+  return { esc: esc, money: money, cdn: cdn, srcset: srcset, nativeWidth: nativeWidth, sizeLabel: sizeLabel, percentOff: percentOff, normalize: normalize, saleDeadline: saleDeadline, countdownParts: countdownParts, clubPoints: clubPoints };
 })();
 
 /* Product card markup, shared by the Node build and the browser (filters, search, wishlist,
@@ -81,14 +84,21 @@ var SKS_CARD = (function (F) {
     }
     return '<p class="price-list"><span class="price">' + from + F.money(p.price) + '</span></p>';
   }
-  function badges(p) {
+  // snippets/product-badges.liquid: sale, bestseller, new arrival, low stock, back in stock, in this order, two per card.
+  // The sale badge is the "−30%" of the price line, so a discounted card keeps one slot for the others.
+  function badgeList(p, max) {
+    if (p.archived) return ['<li class="badge badge--muted">Non più disponibile</li>'];
     var out = [];
-    if (p.archived) out.push('<li class="badge badge--muted">Non più disponibile</li>');
-    else {
-      if (p.isNew) out.push('<li class="badge badge--new">Nuovo</li>');
-      if (p.onlyOneSizeLeft) out.push('<li class="badge badge--outline">Ultima taglia</li>');
-    }
-    return out.length ? '<ul class="product-card__badges" role="list">' + out.slice(0, 2).join('') + '</ul>' : '';
+    if (p.bestseller) out.push('<li class="badge badge--best">Bestseller</li>');
+    if (p.isNew) out.push('<li class="badge badge--new">Nuovo</li>');
+    if (p.lowStock) out.push('<li class="badge badge--outline">Ultimi pezzi</li>');
+    if (p.backInStock) out.push('<li class="badge badge--new">Di nuovo disponibile</li>');
+    max = max || 2;
+    return out.slice(0, p.compareAt ? max - 1 : max);
+  }
+  function badges(p) {
+    var out = badgeList(p);
+    return out.length ? '<ul class="product-card__badges" role="list">' + out.join('') + '</ul>' : '';
   }
   function render(p, o) {
     o = o || {};
@@ -143,7 +153,7 @@ var SKS_CARD = (function (F) {
       '</div>' +
     '</product-card>';
   }
-  return { render: render, splitTitle: splitTitle, priceHtml: priceHtml };
+  return { render: render, splitTitle: splitTitle, priceHtml: priceHtml, badgeList: badgeList };
 })(SKS_FMT);
 
 /* ---------- utilities ---------- */
@@ -270,6 +280,20 @@ document.addEventListener('click', e => {
   }
 });
 $('#drawer-menu')?.addEventListener('dialog:close', () => $$('.drawer-nav__panel').forEach(p => { p.hidden = true; }));
+
+/* ---------- the look viewer (look-viewer.js) loads on the first look a shopper opens; a #look-<id> link opens it
+   on that look when the page shows it. Without JavaScript the card goes to the look page. ---------- */
+const lookViewer = () => import(new URL('look-viewer.js', import.meta.url).href);
+document.addEventListener('click', e => {
+  const link = e.target.closest('[data-look-viewer]');
+  if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  lookViewer().then(m => m.openLook(link)).catch(() => { location.href = link.href; });
+});
+{
+  const m = location.hash.match(/^#look-([\w-]+)$/), link = m && $(`[data-look-viewer="${m[1]}"]`);
+  if (link) { history.replaceState(null, '', location.pathname + location.search); lookViewer().then(v => v.openLook(link)); }
+}
 
 /* ---------- header: tone over the hero, hide on scroll (home and storia), mega menus ---------- */
 (() => {
@@ -416,6 +440,11 @@ function renderCart(newKey) {
   });
   $$('[data-shipping-bar]').forEach(b => b.style.setProperty('--pct', Math.min(1, subtotal / FREE_SHIPPING)));
   $$('[data-cart-subtotal]').forEach(s => { s.textContent = SKS_FMT.money(subtotal); });
+  $$('[data-club-cart]').forEach(el => {
+    const pts = SKS_FMT.clubPoints(subtotal);
+    el.hidden = !count || !pts;
+    $('[data-club-points]', el).textContent = `${pts} punti (${SKS_FMT.money(pts * 0.05)})`;
+  });
   $$('[data-cart-shipping]').forEach(s => { s.textContent = !count ? '' : left > 0 ? '5,90\u00a0€ in Italia' : 'gratuita in Italia'; });
   document.dispatchEvent(new CustomEvent('cart:rendered', { detail: { subtotal } }));
   $$('[data-cart-lines]').forEach(list => {
@@ -578,12 +607,14 @@ const Recent = {
     if (!q) return null;
     const terms = q.split(' ');
     const score = hay => terms.every(t => hay.includes(t)) ? (hay.startsWith(terms[0]) ? 2 : 1) : 0;
-    const products = index.products.map(p => [p, score(SKS_FMT.normalize(`${p[2]} ${p[1]} ${p[3]}`))]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    const products = index.products.map(p => [p, score(SKS_FMT.normalize(`${p[2]} ${p[1]} ${p[3]} ${p[12] || ''} ${p[14] || ''}`))]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
     const brands = index.brands.filter(b => score(SKS_FMT.normalize(b[1])));
     const colls = index.collections.filter(c => score(SKS_FMT.normalize(c[1])));
+    const articles = (index.articles || []).map(a => [a, score(SKS_FMT.normalize(`${a[2]} ${a[3]}`))]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    const pages = (index.pages || []).filter(pg => score(SKS_FMT.normalize(`${pg[1]} ${pg[2]}`)));
     // the session's last search feeds "Scelti per te" (with tracking consent, as live)
     if (q.length >= 3 && products.length && trackingOK()) { try { sessionStorage.setItem('sks-last-q', raw.trim()); } catch { /* private mode */ } }
-    return { q, products, brands, colls };
+    return { q, products, brands, colls, articles, pages };
   }
   function renderIdle() {
     const recent = Recent.list.slice(0, 6);
@@ -599,20 +630,30 @@ const Recent = {
     const r = search(index, raw);
     idle.hidden = true; out.hidden = false;
     const url = `${BASE}search.html?q=${encodeURIComponent(raw)}`;
-    if (!r.products.length && !r.brands.length && !r.colls.length) {
+    if (!r.products.length && !r.brands.length && !r.colls.length && !r.articles.length && !r.pages.length) {
       out.innerHTML = `<div class="search-empty"><h3>Nessun risultato per “${SKS_FMT.esc(raw)}”</h3><p class="muted">Prova con il nome della marca o del capo, per esempio “piumino” o “Barbour”. Oppure chiedi a noi in negozio: ${'+39 015 405464'}.</p><ul class="chips" role="list" style="margin-top:16px">${['Barbour', 'Piumino', 'Samba', 'Pedule'].map(s => `<li><button type="button" class="chip" data-search-suggest="${s}">${s}</button></li>`).join('')}</ul></div>`;
       return;
     }
     const products = r.products.slice(0, 8).map(p => ({ handle: p[0], title: p[1], brand: p[2], price: p[5], image: p[6] }));
-    out.innerHTML = `<div class="search-results${r.brands.length || r.colls.length ? '' : ' search-results--single'}">
+    // "Suggerimenti" (Shopify's query suggestions): the searches the results suggest, type and brand + type
+    const sugg = [];
+    for (const p of r.products.slice(0, 40)) for (const t of [p[12], `${p[2]} ${p[12]}`]) {
+      if (t && !sugg.includes(t) && SKS_FMT.normalize(t) !== r.q) sugg.push(t);
+      if (sugg.length >= 4) break;
+    }
+    const side = r.brands.length || r.colls.length || r.articles.length || r.pages.length;
+    out.innerHTML = `${sugg.length ? `<div class="search-suggest"><h3 class="visually-hidden">Suggerimenti</h3><ul class="chips" role="list">${sugg.slice(0, 4).map(t => `<li><a class="chip" href="${BASE}search.html?q=${encodeURIComponent(t)}" data-search-suggest="${SKS_FMT.esc(t)}">${mark(t, r.q)}</a></li>`).join('')}</ul></div>` : ''}
+      <div class="search-results${side ? '' : ' search-results--single'}">
       <div class="search-results__side">
         ${r.brands.length ? `<h3>Marche</h3><ul role="list">${r.brands.slice(0, 5).map(b => `<li><a href="${BASE}collections/${b[0]}.html">${mark(b[1], r.q)} <span class="meta">${b[2]}</span></a></li>`).join('')}</ul>` : ''}
         ${r.colls.length ? `<h3>Categorie</h3><ul role="list">${r.colls.slice(0, 6).map(c => `<li><a href="${BASE}collections/${c[0]}.html">${mark(c[1], r.q)}</a></li>`).join('')}</ul>` : ''}
+        ${r.articles.length ? `<h3>Articoli del blog</h3><ul role="list">${r.articles.slice(0, 3).map(a => `<li><a href="${BASE}blogs/${a[0]}/${a[1]}.html">${mark(a[2], r.q)}</a></li>`).join('')}</ul>` : ''}
+        ${r.pages.length ? `<h3>Pagine</h3><ul role="list">${r.pages.slice(0, 4).map(pg => `<li><a href="${BASE}${pg[0].slice(1)}.html">${mark(pg[1], r.q)}</a></li>`).join('')}</ul>` : ''}
       </div>
       <div class="search-results__main">
-        <h3>Prodotti <span class="meta">${r.products.length}</span></h3>
+        ${r.products.length ? `<h3>Prodotti <span class="meta">${r.products.length}</span></h3>` : ''}
         <div class="search-results__grid">${products.map(hit).join('')}</div>
-        <p class="search-results__all"><a class="button button--outline" href="${url}">Vedi tutti i ${r.products.length} risultati</a></p>
+        <p class="search-results__all"><a class="button button--outline" href="${url}">Vedi tutti i risultati</a></p>
       </div></div>`;
   }
   let t = 0;
@@ -672,6 +713,12 @@ document.addEventListener('submit', e => {
   if (d && f.hasAttribute('data-close-on-success')) d.close();
   toast(f.dataset.protoForm || 'Anteprima: il modulo non viene inviato.');
   f.reset();
+});
+
+/* ---------- prototype stand-ins for widgets a third party draws (Shop's follow button): they say so ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-proto-note]');
+  if (b) toast(b.dataset.protoNote);
 });
 
 /* ---------- luxe-motion: only the theme's Motion One (inView, scroll, animate) + CSS ---------- */
@@ -792,521 +839,6 @@ document.addEventListener('submit', e => {
     const media = mediaOf(card);
     if (media) { media.style.viewTransitionName = nameFor(card); const clear = () => { media.style.viewTransitionName = ''; }; e.viewTransition.finished.then(clear, clear); }
   });
-})();
-
-/* ---------- proto-facets: filters, sort, density, load more on the collection JSON ----------
-   In the theme the grid is re-rendered by Prestige's facets (Section Rendering API); the UI, the URL
-   state and the View Transition around the swap are what moves into the theme. */
-(() => {
-  const root = $('facet-filters');
-  if (!root) return;
-  const data = JSON.parse($('[data-collection-json]', root).textContent);
-  registerCards(data);
-  const perPage = +root.dataset.perPage || 24;
-  const grid = $('[data-grid]', root), body = $('[data-facets-body]');
-  const initialLooks = $$('.grid-look', grid).map(n => n.outerHTML);
-  const params = new URLSearchParams(location.search);
-  const state = {
-    brand: new Set(params.getAll('marca')), size: new Set(params.getAll('taglia')), color: new Set(params.getAll('colore')),
-    type: params.get('tipo') || '', gender: params.get('genere') || '', sale: params.get('saldi') === '1', min: +params.get('min') || 0, max: +params.get('max') || 0,
-    sort: params.get('ordina') || 'evidenza', density: params.get('vista') || '', shown: Math.max(perPage, +params.get('n') || perPage)
-  };
-  const sizeOrder = l => { const s = l.toUpperCase(); const L = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL']; const li = L.indexOf(s); if (li >= 0) return 1000 + li; const m = s.match(/^(\d+(?:[.,]\d+)?)(?:\s+(\d)\/(\d))?/); if (m) return parseFloat(m[1].replace(',', '.')) + (m[2] ? m[2] / m[3] : 0); return /T\.?U/.test(s) ? 3000 : 2000; };
-  const facetValues = () => {
-    const brands = {}, sizes = {}, colors = {};
-    for (const p of data) {
-      brands[p.brand] = (brands[p.brand] || 0) + 1;
-      for (const [l, a] of p.sizes) if (a) sizes[l] = (sizes[l] || 0) + 1;
-      if (p.colorName) colors[p.colorName] = { n: ((colors[p.colorName] || {}).n || 0) + 1, hex: p.hex || '#ccc' };
-    }
-    return { brands, sizes, colors, prices: data.map(p => p.price) };
-  };
-  const V = facetValues();
-  const priceMin = Math.floor(Math.min(...V.prices)), priceMax = Math.ceil(Math.max(...V.prices));
-
-  // the theme's gender pills (templates/collection.json): unisex counts for Uomo and Donna, junior unisex for
-  // Bambino and Bambina; "junior" (Bambini) takes every kid
-  const AUD = { uomo: ['uomo', 'unisex'], donna: ['donna', 'unisex'], bambino: ['bambino', 'junior'], bambina: ['bambina', 'junior'], junior: ['bambino', 'bambina', 'junior'] };
-  const forGender = (p, g) => !g || (AUD[g] || [g]).includes(p.audience || p.gender);
-  const GENDER_LABEL = { uomo: 'Uomo', donna: 'Donna', bambino: 'Bambino', bambina: 'Bambina', junior: 'Bambini' };
-  function matches(p, skip) {
-    if (skip !== 'brand' && state.brand.size && !state.brand.has(p.brand)) return false;
-    if (skip !== 'size' && state.size.size && !p.sizes.some(([l, a]) => a && state.size.has(l))) return false;
-    if (skip !== 'color' && state.color.size && !state.color.has(p.colorName)) return false;
-    if (skip !== 'type' && state.type && p.type !== state.type) return false;
-    if (skip !== 'gender' && !forGender(p, state.gender)) return false;
-    if (state.sale && !p.compareAt) return false;
-    if (state.min && p.price < state.min) return false;
-    if (state.max && p.price > state.max) return false;
-    return true;
-  }
-  const sorters = {
-    evidenza: null,
-    novita: (a, b) => (b.isNew - a.isNew),
-    'prezzo-asc': (a, b) => a.price - b.price,
-    'prezzo-desc': (a, b) => b.price - a.price
-  };
-  const activeCount = () => state.brand.size + state.size.size + state.color.size + (state.sale ? 1 : 0) + (state.min || state.max ? 1 : 0) + (state.gender ? 1 : 0);
-  const syncGenderChips = () => $$('[data-gender-chip]').forEach(c => { const on = c.dataset.genderChip === state.gender; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', String(on)); });
-  // archived (no longer sold) items never lead a listing: stable partition after sorting
-  const filtered = () => { const list = data.filter(p => matches(p)); const s = sorters[state.sort]; const sorted = s ? [...list].sort(s) : list; return [...sorted.filter(p => !p.archived), ...sorted.filter(p => p.archived)]; };
-
-  function syncUrl() {
-    const q = new URLSearchParams();
-    state.brand.forEach(v => q.append('marca', v)); state.size.forEach(v => q.append('taglia', v)); state.color.forEach(v => q.append('colore', v));
-    if (state.type) q.set('tipo', state.type); if (state.gender) q.set('genere', state.gender); if (state.sale) q.set('saldi', '1');
-    if (state.min) q.set('min', state.min); if (state.max) q.set('max', state.max);
-    if (state.sort !== 'evidenza') q.set('ordina', state.sort); if (state.density) q.set('vista', state.density);
-    if (state.shown > perPage) q.set('n', state.shown);
-    history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
-  }
-
-  function renderFacets() {
-    const count = (key, val) => data.filter(p => matches(p, key) && (key === 'brand' ? p.brand === val : key === 'size' ? p.sizes.some(([l, a]) => a && l === val) : p.colorName === val)).length;
-    const group = (title, inner, open) => `<details class="facet" ${open ? 'open' : ''}><summary>${title}<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div class="facet__body">${inner}</div></details>`;
-    const brands = Object.keys(V.brands).sort((a, b) => a.localeCompare(b, 'it'));
-    const sizes = Object.keys(V.sizes).sort((a, b) => sizeOrder(a) - sizeOrder(b));
-    const colors = Object.keys(V.colors).sort((a, b) => a.localeCompare(b, 'it'));
-    body.innerHTML =
-      (brands.length > 1 ? group('Marca', `<ul class="facet__list" role="list">${brands.map(b => { const n = count('brand', b); return `<li><label class="check"><input type="checkbox" data-f="brand" value="${SKS_FMT.esc(b)}" ${state.brand.has(b) ? 'checked' : ''} ${n ? '' : 'disabled'}><span translate="no">${SKS_FMT.esc(b)}</span><span class="check__n">${n}</span></label></li>`; }).join('')}</ul>`, true) : '') +
-      (sizes.length > 1 ? group('Taglia', `<div class="facet__sizes">${sizes.map(s => { const n = count('size', s); return `<label class="size-toggle"><input type="checkbox" data-f="size" value="${SKS_FMT.esc(s)}" ${state.size.has(s) ? 'checked' : ''} ${n ? '' : 'disabled'}><span>${SKS_FMT.esc(s)}</span></label>`; }).join('')}</div>`, true) : '') +
-      (colors.length > 1 ? group('Colore', `<ul class="facet__list facet__list--colors" role="list">${colors.map(c => { const n = count('color', c); return `<li><label class="check"><input type="checkbox" data-f="color" value="${SKS_FMT.esc(c)}" ${state.color.has(c) ? 'checked' : ''} ${n ? '' : 'disabled'}><span class="swatch" style="--sw:${V.colors[c].hex}"></span><span>${SKS_FMT.esc(c)}</span><span class="check__n">${n}</span></label></li>`; }).join('')}</ul>`) : '') +
-      group('Prezzo', `<div class="price-range"><label><span class="field__label">Da (€)</span><input class="field__input" type="number" inputmode="numeric" min="${priceMin}" max="${priceMax}" placeholder="${priceMin}" value="${state.min || ''}" data-f="min"></label><label><span class="field__label">A (€)</span><input class="field__input" type="number" inputmode="numeric" min="${priceMin}" max="${priceMax}" placeholder="${priceMax}" value="${state.max || ''}" data-f="max"></label></div>`) +
-      (['uomo', 'donna', 'bambino', 'bambina'].filter(g => data.some(p => forGender(p, g))).length > 1 ? group('Genere', `<div class="facet__sizes">${[['', 'Tutti'], ['uomo', 'Uomo'], ['donna', 'Donna'], ['bambino', 'Bambino'], ['bambina', 'Bambina']].filter(([g]) => !g || data.some(p => forGender(p, g))).map(([g, l]) => `<label class="size-toggle"><input type="radio" name="f-genere" data-f="gender" value="${g}" ${state.gender === g ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>`, true) : '') +
-      (data.some(p => p.compareAt) ? group('Saldi', `<label class="check"><input type="checkbox" data-f="sale" ${state.sale ? 'checked' : ''}><span>Solo capi in saldo</span><span class="check__n">${data.filter(p => p.compareAt).length}</span></label>`) : '');
-  }
-
-  function renderApplied() {
-    const chips = [];
-    state.brand.forEach(v => chips.push(['brand', v, v])); state.size.forEach(v => chips.push(['size', v, `Taglia ${v}`])); state.color.forEach(v => chips.push(['color', v, v]));
-    if (state.sale) chips.push(['sale', '', 'In saldo']);
-    if (state.gender) chips.push(['gender', '', GENDER_LABEL[state.gender] || state.gender]);
-    if (state.min || state.max) chips.push(['price', '', `${state.min || priceMin}–${state.max || priceMax} €`]);
-    $('[data-applied]', root).innerHTML = chips.map(([k, v, l]) => `<li><button type="button" class="chip chip--remove" data-remove-f="${k}" data-v="${SKS_FMT.esc(v)}" aria-label="Togli il filtro ${SKS_FMT.esc(l)}">${SKS_FMT.esc(l)}<svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></li>`).join('');
-    const n = activeCount();
-    const badge = $('[data-active-count]', root); badge.hidden = !n; badge.textContent = n;
-  }
-
-  function renderGrid(list) {
-    const shown = list.slice(0, state.shown);
-    const pristine = !activeCount() && !state.type && state.sort === 'evidenza';
-    let html = '';
-    shown.forEach((p, i) => {
-      html += SKS_CARD.render(p, { base: BASE });
-      if (pristine && (i === 7 || i === 15) && initialLooks[i === 7 ? 0 : 1] && list.length > i + 4) html += initialLooks[i === 7 ? 0 : 1];
-    });
-    grid.innerHTML = html;
-    // one size filtered: the product page opens with that size chosen (?taglia=)
-    if (state.size.size === 1) { const t = [...state.size][0]; $$('product-card a[href]', grid).forEach(a => { const u = new URL(a.href); u.searchParams.set('taglia', t); a.href = u.href; }); }
-    renderWishState();
-    $$('[data-result-count]').forEach(e => { e.textContent = list.length; });
-    $('[data-filter-empty]', root).hidden = !!list.length;
-    const wrap = $('[data-load-more-wrap]', root);
-    wrap.hidden = list.length <= state.shown;
-    $('[data-shown]', root).textContent = Math.min(state.shown, list.length);
-    $('[data-total]', root).textContent = list.length;
-    $('[data-load-bar]', root).style.setProperty('--pct', Math.min(1, state.shown / Math.max(1, list.length)));
-  }
-
-  function syncChipCounts() {
-    $$('[data-type-chip]').forEach(c => {
-      const t = c.dataset.typeChip, n = data.filter(p => matches(p, 'type') && (!t || p.type === t)).length;
-      $('.chip__count', c).textContent = c.classList.contains('type-tile') ? `${n} ${n === 1 ? 'prodotto' : 'prodotti'}` : n;
-      c.parentElement.hidden = !n && !!t && state.type !== t;
-    });
-    $$('[data-gender-chip]').forEach(c => { $('.chip__count', c).textContent = data.filter(p => matches(p, 'gender') && forGender(p, c.dataset.genderChip)).length; });
-  }
-
-  function update({ animate = true, facets = true } = {}) {
-    const list = filtered();
-    const run = () => { renderGrid(list); renderApplied(); if (facets) renderFacets(); syncChipCounts(); syncUrl(); };
-    if (animate && document.startViewTransition && MOTION_OK()) {
-      // each card keeps its place in the transition: the grid reflows instead of blinking
-      $$('product-card', grid).forEach((c, i) => { if (i < 16) c.style.viewTransitionName = 'card-' + i; });
-      const t = document.startViewTransition(() => { run(); $$('product-card', grid).forEach((c, i) => { if (i < 16) c.style.viewTransitionName = 'card-' + i; }); });
-      const clear = () => $$('product-card', grid).forEach(c => { c.style.viewTransitionName = ''; });
-      t.ready.catch(() => {}); t.updateCallbackDone.catch(() => {}); t.finished.then(clear, clear);
-    } else run();
-    announce(`${list.length} prodotti`);
-  }
-
-  function setDensity(d) {
-    state.density = d;
-    grid.dataset.density = d || '';
-    $$('[data-density]', root).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.density === (d || (matchMedia('(min-width: 768px)').matches ? '4' : '2')))));
-  }
-
-  // events
-  body.addEventListener('change', e => {
-    const f = e.target.dataset.f;
-    if (!f) return;
-    if (['brand', 'size', 'color'].includes(f)) { const set = state[f]; e.target.checked ? set.add(e.target.value) : set.delete(e.target.value); }
-    if (f === 'sale') state.sale = e.target.checked;
-    if (f === 'gender') { state.gender = e.target.value; syncGenderChips(); }
-    if (f === 'min' || f === 'max') state[f] = +e.target.value || 0;
-    state.shown = perPage;
-    update({ facets: false });
-    renderFacets();
-    const again = body.querySelector(`[data-f="${f}"][value="${CSS.escape(e.target.value || '')}"]`) || body.querySelector(`[data-f="${f}"]`);
-    again && again.focus();
-  });
-  root.addEventListener('click', e => {
-    const rm = e.target.closest('[data-remove-f]');
-    if (rm) {
-      const k = rm.dataset.removeF, v = rm.dataset.v;
-      if (k === 'sale') state.sale = false; else if (k === 'gender') { state.gender = ''; syncGenderChips(); } else if (k === 'price') { state.min = 0; state.max = 0; } else state[k].delete(v);
-      update(); return;
-    }
-    const d = e.target.closest('[data-density]');
-    if (d) { setDensity(d.dataset.density); syncUrl(); return; }
-    if (e.target.closest('[data-load-more]')) {
-      const before = state.shown;
-      state.shown += perPage;
-      update({ animate: false, facets: false });
-      const next = $$('product-card', grid)[before];
-      next && next.querySelector('.product-card__title a')?.focus();
-    }
-  });
-  document.addEventListener('click', e => {
-    if (e.target.closest('[data-clear-filters]')) {
-      state.brand.clear(); state.size.clear(); state.color.clear(); state.sale = false; state.min = 0; state.max = 0; state.type = ''; state.gender = ''; syncGenderChips();
-      $$('[data-type-chip]').forEach(c => { const on = c.dataset.typeChip === ''; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', String(on)); });
-      update();
-    }
-    const gchip = e.target.closest('[data-gender-chip]');
-    if (gchip) { const g = gchip.dataset.genderChip; state.gender = g && state.gender === g && gchip.classList.contains('audience-pill') ? '' : g; syncGenderChips(); state.shown = perPage; update(); return; }
-    const chip = e.target.closest('[data-type-chip]');
-    if (chip) {
-      state.type = chip.dataset.typeChip;
-      $$('[data-type-chip]').forEach(c => { const on = c === chip; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', String(on)); });
-      state.shown = perPage;
-      update();
-    }
-  });
-  $('[data-sort]', root).value = state.sort;
-  $('[data-sort]', root).addEventListener('change', e => { state.sort = e.target.value; update(); });
-
-  // restore from the URL (Back keeps filters, sort, density and how many were shown)
-  setDensity(state.density);
-  syncGenderChips();
-  if (state.type) $$('[data-type-chip]').forEach(c => { const on = c.dataset.typeChip === state.type; c.classList.toggle('is-active', on); c.setAttribute('aria-pressed', String(on)); });
-  if (activeCount() || state.type || state.gender || state.sort !== 'evidenza' || state.shown > perPage) update({ animate: false });
-  else { renderFacets(); renderApplied(); }
-})();
-
-/* ---------- product page ---------- */
-(() => {
-  const el = $('#product-json');
-  if (!el) return;
-  const P = JSON.parse(el.textContent);
-  CARDS[P.handle] = CARDS[P.handle] || { t: P.title, b: P.brand, p: P.price, c: P.compareAt, i: P.image, s: P.sizes };
-  const info = { handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, image: P.image };
-  const form = $('[data-product-form]');
-  const chosen = $('[data-size-chosen]'), error = $('[data-size-error]');
-  const selected = () => form && (form.querySelector('input[name="size"]:checked') || {}).value;
-
-  // sticky bar sizes: the same sizes and counts as the picker above, kept in step both ways (as the theme's
-  // assets/sticky-atc-sync.js does with the app's select). A sold-out size opens the back-in-stock form.
-  const sheet = $('[data-sticky-sheet]'), toggle = $('[data-sticky-toggle]');
-  const stickyValue = $('[data-sticky-value]'), stickyCount = $('[data-sticky-count]'), stickyHint = $('[data-sticky-hint]');
-  const stickyPicks = $$('[data-sticky-pick]');
-  let pendingAdd = false;
-  const syncSticky = size => {
-    stickyPicks.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.stickyPick === size)));
-    const pick = stickyPicks.find(b => b.dataset.stickyPick === size);
-    if (stickyValue && pick) stickyValue.textContent = size;
-    if (stickyCount) stickyCount.textContent = pick ? (pick.querySelector('.size-option__stock') || {}).textContent || '' : '';
-  };
-  const openSheet = adding => {
-    if (!sheet) return;
-    pendingAdd = !!adding;
-    sheet.hidden = false;
-    toggle?.setAttribute('aria-expanded', 'true');
-    if (stickyHint) stickyHint.hidden = !adding;
-    (sheet.querySelector('[aria-pressed="true"]') || sheet.querySelector('.sticky-size'))?.focus();
-  };
-  const closeSheet = focusBack => {
-    if (!sheet || sheet.hidden) return;
-    sheet.hidden = true;
-    pendingAdd = false;
-    toggle?.setAttribute('aria-expanded', 'false');
-    if (focusBack) toggle?.focus();
-  };
-  const notify = (size, opener) => { const l = $('[data-notify-label]'); if (l) l.textContent = size; openDialog('notify-dialog', opener); };
-  toggle?.addEventListener('click', () => (sheet.hidden ? openSheet(false) : closeSheet(true)));
-  sheet?.addEventListener('click', e => {
-    if (e.target.closest('[data-sticky-close]')) { closeSheet(true); return; }
-    const pick = e.target.closest('[data-sticky-pick]');
-    if (pick) {
-      const size = pick.dataset.stickyPick, adding = pendingAdd;
-      const r = form && [...form.querySelectorAll('input[name="size"]')].find(i => i.value === size);
-      if (r && !r.checked) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-      closeSheet(!adding);
-      if (adding) addWithFeedback($('[data-sticky-add]'), info, size);
-      else announce(`Taglia ${size} scelta.`);
-      return;
-    }
-    const sold = e.target.closest('[data-notify-size]');
-    if (sold) { closeSheet(false); notify(sold.dataset.notifySize, toggle); }
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheet && !sheet.hidden) closeSheet(true); });
-  document.addEventListener('pointerdown', e => { if (sheet && !sheet.hidden && !e.target.closest('[data-sticky-atc]')) closeSheet(false); });
-
-  // the chosen size travels to the other colours (?taglia=), so a colour switch never resets it silently
-  const carrySize = size => $$('.sibling[href]').forEach(a => { const u = new URL(a.href); size ? u.searchParams.set('taglia', size) : u.searchParams.delete('taglia'); a.href = u.pathname.split('/').pop() + u.search; });
-  if (form) {
-    const onSize = r => {
-      syncSticky(r.value);
-      if (chosen) { chosen.textContent = r.value; chosen.classList.remove('meta'); }
-      error.hidden = true;
-      form.querySelector('.size-picker').classList.remove('is-invalid');
-      carrySize(r.value);
-      // the size lives in the URL: Back and reload keep it (bfcache or not)
-      const u = new URL(location.href); u.searchParams.set('taglia', r.value); history.replaceState(history.state, '', u.pathname + u.search + u.hash);
-    };
-    form.addEventListener('change', e => { if (e.target.name === 'size') onSize(e.target); });
-    addEventListener('pageshow', () => { const r = form.querySelector('input[name="size"]:checked'); if (r) onSize(r); });
-    const wanted = new URLSearchParams(location.search).get('taglia');
-    if (wanted) {
-      const r = [...form.querySelectorAll('input[name="size"]')].find(i => i.value === wanted);
-      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
-      else { error.hidden = false; error.classList.add('is-note'); error.textContent = `La taglia ${wanted} non è disponibile in questo colore: scegline un’altra.`; }
-    }
-    const needSize = () => {
-      error.hidden = false;
-      form.querySelector('.size-picker').classList.add('is-invalid');
-      const first = form.querySelector('input[name="size"]');
-      first && first.focus({ preventScroll: true });
-      form.querySelector('.size-picker').scrollIntoView({ block: 'center', behavior: MOTION_OK() ? 'smooth' : 'auto' });
-      announce('Scegli una taglia per aggiungere al carrello.');
-    };
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const size = selected();
-      if (!size) { needSize(); return; }
-      addWithFeedback(form.querySelector('[data-add-to-cart]'), info, size);
-    });
-    $('[data-sticky-add]')?.addEventListener('click', e => {
-      const btn = e.currentTarget;
-      // every size sold out: pick the one to be told about (or straight to the form with one size)
-      if (btn.hasAttribute('data-sticky-notify')) { if (sheet) openSheet(false); else notify(P.sizes[0][0], btn); return; }
-      const size = selected();
-      // no size yet: the sizes open on the bar itself, and the pick adds to the cart
-      if (!size) { if (sheet) openSheet(true); else needSize(); return; }
-      addWithFeedback(btn, info, size);
-    });
-    // sold-out sizes: back-in-stock request (the app's button in the theme)
-    form.addEventListener('click', e => {
-      const n = e.target.closest('[data-notify-size]');
-      if (!n) return;
-      $('[data-notify-label]').textContent = n.dataset.notifySize;
-      openDialog('notify-dialog', n);
-    });
-  }
-
-  // sticky add-to-cart once the main button has scrolled away (IntersectionObserver, no scroll listener)
-  const sticky = $('[data-sticky-atc]'), main = $('[data-add-to-cart]');
-  if (sticky && main) {
-    sticky.hidden = false;
-    // the floating buttons sit above the bar, whatever its height (the sale strip makes it taller on phones)
-    const barHeight = () => ROOT.style.setProperty('--sticky-h', `${Math.ceil(sticky.getBoundingClientRect().height - parseFloat(getComputedStyle(sticky).paddingBottom)) + 24}px`);
-    barHeight();
-    addEventListener('resize', barHeight, { passive: true });
-    new IntersectionObserver(([e]) => {
-      const show = !e.isIntersecting && e.boundingClientRect.top < 0;
-      sticky.classList.toggle('is-visible', show);
-      sticky.setAttribute('aria-hidden', String(!show));
-      sticky.inert = !show;
-      if (!show) closeSheet(false);
-    }).observe(main);
-  }
-
-  // delivery window: 1-3 working days from the next working day, in Italian
-  const d = $('[data-delivery]');
-  if (d) {
-    d.textContent = deliveryWindow();
-    const copy = $('[data-delivery-copy]'); if (copy) copy.textContent = d.textContent;
-  }
-
-  // shipping line aware of the cart: free above 50 € (this product included), otherwise how much is missing
-  const ship = $('[data-pdp-shipping]');
-  const shipLine = () => {
-    if (!ship) return;
-    const total = Cart.subtotal() + (Cart.lines.some(l => l.handle === P.handle) ? 0 : P.price);
-    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong> in Italia per questo ordine'
-      : `Spedizione 5,90&nbsp;€ in Italia: <strong>ti mancano ${SKS_FMT.money(50 - total)}</strong> per averla gratis`;
-  };
-  shipLine();
-  document.addEventListener('cart:rendered', shipLine);
-
-  // gallery: PhotoSwipe from the theme (vendor + photoswipe import map entry), zoom 1.5 as live; on phones a
-  // swipe carousel with dots (the live mobile_controls: dots)
-  const gallery = $('[data-gallery]');
-  if (gallery) {
-    try {
-      const lb = new PhotoSwipeLightbox({ gallery, children: 'a', pswpModule: () => import('photoswipe'), bgOpacity: 1, showHideAnimationType: MOTION_OK() ? 'zoom' : 'none', wheelToZoom: true });
-      lb.init();
-    } catch { /* links still open the full image */ }
-    const dots = $$('[data-gallery-dot]');
-    if (dots.length) {
-      gallery.addEventListener('scroll', () => requestAnimationFrame(() => {
-        const i = Math.round(gallery.scrollLeft / Math.max(1, gallery.clientWidth));
-        dots.forEach((d, k) => d.toggleAttribute('aria-current', k === i));
-      }), { passive: true });
-      dots.forEach((d, k) => d.addEventListener('click', () => gallery.scrollTo({ left: k * gallery.clientWidth, behavior: MOTION_OK() ? 'smooth' : 'auto' })));
-    }
-  }
-
-  // sale countdown (snippets/sale-countdown.liquid): one ticker for the line under the price and its copy in
-  // the sticky bar; days-hours-minutes, then hours-minutes-seconds in the last day. Past the deadline the timer
-  // goes and the sale line stays, as assets/sale-countdown.js does.
-  const timers = $$('[data-sale-timer]');
-  if (timers.length) {
-    const ends = SKS_FMT.saleDeadline(Date.now());
-    const label = 'L’offerta scade ' + new Date(ends).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-    timers.forEach(t => t.setAttribute('aria-label', label));
-    let id = 0, step = 0;
-    const paint = () => {
-      const left = ends - Date.now();
-      if (left <= 0) { clearInterval(id); timers.forEach(t => t.remove()); return 0; }
-      const html = SKS_FMT.countdownParts(left).map(([v, u]) => `<span class="sale-line__part"><b>${v}</b> <span class="sale-line__unit">${u}</span></span>`).join(' ');
-      timers.forEach(t => { if (t.innerHTML !== html) t.innerHTML = html; });
-      return left < 86400000 ? 1000 : 30000;
-    };
-    const start = () => {
-      clearInterval(id);
-      step = paint();
-      if (step) id = setInterval(() => { const next = paint(); if (next !== step) start(); }, step);
-    };
-    start();
-    document.addEventListener('visibilitychange', () => (document.hidden ? clearInterval(id) : start()));
-  }
-
-  // recently viewed: shown under the product (the theme stored them without a section)
-  const recent = Recent.list.filter(r => r.handle !== P.handle).slice(0, 4);
-  Recent.push({ handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, images: P.images, image: P.image, sizes: P.sizes, priceVaries: P.priceVaries, isNew: P.isNew, archived: P.archived });
-  const sec = $('[data-recent-section]');
-  if (sec && recent.length >= 2) {
-    registerCards(recent.map(r => ({ ...r, images: r.images || [r.image] })));
-    $('[data-recent-grid]', sec).innerHTML = recent.map(r => SKS_CARD.render({ ...r, images: r.images || [r.image], sizes: r.sizes || [] }, { base: BASE })).join('');
-    sec.hidden = false;
-    renderWishState();
-  }
-})();
-
-
-
-/* ---------- "Non sei sicuro della tua taglia?": the size-suggestions modal (integrated1 sizesuggestions) ----
-   Live: two steps (usual size, height, weight; then body, belly, age, fit), then POST /api/recommend and
-   "La tua taglia consigliata" with a compatibility score. The preview estimates on the device with the same
-   inputs: chest from height and weight, the fit offsets the live info page states (slim -3 cm, relaxed
-   +4 cm), the brand table when the service has one, else a generic table. Inputs stay in this browser. */
-(() => {
-  const form = $('[data-size-advisor]');
-  const pj = $('#product-json');
-  if (!form || !pj) return;
-  const P = JSON.parse(pj.textContent);
-  const KEY = 'sks-fit';
-  const shoes = form.dataset.kind === 'shoes', female = form.dataset.gender === 'F';
-  const steps = $$('[data-sz-step]', form), result = $('[data-sz-result]', form), err = $('[data-sz-error]', form);
-  const bars = $$('.sz-progress span', form);
-  // generic body-chest tables (cm) when the brand has none in the size service
-  const GENERIC = female
-    ? [['XS', 78, 82], ['S', 82, 86], ['M', 86, 92], ['L', 92, 98], ['XL', 98, 104], ['XXL', 104, 110]]
-    : [['XS', 84, 88], ['S', 88, 94], ['M', 94, 100], ['L', 100, 106], ['XL', 106, 112], ['XXL', 112, 118]];
-  const chart = form.dataset.chart ? JSON.parse(form.dataset.chart) : GENERIC;
-  // Italian numeric sizes some brands use instead of letters
-  const IT = female ? { XS: '38', S: '40', M: '42', L: '44', XL: '46', XXL: '48' } : { XS: '44', S: '46', M: '48', L: '50', XL: '52', XXL: '54' };
-  const saved = store.get(KEY, {});
-  const state = { usual: saved.usual ?? null, body: saved.body || 'regular', belly: saved.belly || 'average', age: saved.age || '26-40', fit: saved.fit || 'regular' };
-  if (saved.height) form.height && (form.height.value = saved.height);
-  if (saved.weight) form.weight && (form.weight.value = saved.weight);
-  const press = (grp, val) => $$(`[data-grp="${grp}"]`, form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.val === val)));
-  ['body', 'belly', 'age', 'fit'].forEach(g => press(g, state[g]));
-  if (state.usual != null) $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.usual === state.usual)));
-
-  function show(n) {
-    steps.forEach(s => { s.hidden = s.dataset.szStep !== String(n); });
-    result.hidden = n !== 'result';
-    bars.forEach((b, i) => b.classList.toggle('is-active', n === 'result' || i === n - 1));
-  }
-  function fail(msg, field) { err.textContent = msg; err.hidden = false; field?.focus(); }
-  const sizeOf = label => P.sizes.find(s => s[0] === label) || P.sizes.find(s => s[0] === IT[label]);
-
-  function estimate() {
-    if (shoes) {
-      const n = state.usual;
-      return { size: n, pct: form.ref_brand.value === 'Non lo so' ? 72 : 84, basis: `il tuo numero abituale${form.ref_brand.value !== 'Non lo so' ? ` in ${form.ref_brand.value}` : ''}` };
-    }
-    const h = +form.height.value, w = +form.weight.value;
-    // chest from height and weight (fitted on ANSUR-like averages), then body, belly and fit
-    let chest = 0.5 * w + 0.25 * h + (female ? 6 : 15);
-    chest += { slim: -2, regular: 0, curvy: 3 }[state.body] + { flat: -1, average: 0, round: 2 }[state.belly];
-    chest += { slim: -3, regular: 0, relaxed: 4 }[state.fit];
-    let i = chart.findIndex(([, lo, hi]) => chest >= lo && chest < hi);
-    if (i < 0) i = chest < chart[0][1] ? 0 : chart.length - 1;
-    const u = chart.findIndex(r => r[0] === state.usual);
-    if (u >= 0 && Math.abs(u - i) === 1) i = Math.round((i + u) / 2 + (state.fit === 'relaxed' ? 0.25 : -0.25)); // the usual size weighs in
-    const [label, lo, hi] = chart[i];
-    const mid = (lo + hi) / 2, half = (hi - lo) / 2;
-    const off = Math.min(1.5, Math.abs(chest - mid) / half);
-    const pct = Math.round(Math.max(45, 96 - off * 30 - (state.usual ? 0 : 6)));
-    return { size: label, pct, basis: `altezza ${h} cm, peso ${w} kg${state.usual ? `, taglia abituale ${state.usual}` : ''}` };
-  }
-
-  function render(r) {
-    const s = sizeOf(r.size);
-    const label = s ? s[0] : r.size;
-    const note = r.pct >= 90 ? 'misure al centro della taglia' : r.pct >= 70 ? 'buona vestibilità' : r.pct >= 50 ? 'valuta anche la taglia vicina' : 'stima indicativa';
-    const dots = '●'.repeat(Math.round(r.pct / 25)).padEnd(4, '○');
-    result.innerHTML = `<p class="sz-result__label">La tua taglia consigliata</p>
-      <p class="sz-result__size">${SKS_FMT.esc(label)}</p>
-      <p class="sz-result__conf"><span aria-hidden="true">${dots}</span> Compatibilità ${r.pct}%: ${note}</p>
-      ${s && !s[1] ? `<p class="sz-result__warn">La taglia consigliata per te è ${SKS_FMT.esc(label)}, ma non è disponibile in questo colore.</p>
-        <button type="button" class="button button--outline button--block" data-sz-notify="${SKS_FMT.esc(label)}">Avvisami quando torna la ${SKS_FMT.esc(label)}</button>`
-      : s ? `<button type="button" class="button button--primary button--block" data-sz-add="${SKS_FMT.esc(label)}">Aggiungi la ${SKS_FMT.esc(label)} al carrello</button>`
-      : `<p class="sz-result__warn">Questo modello non ha la ${SKS_FMT.esc(label)}: guarda le taglie disponibili o chiedici un consiglio.</p>`}
-      <p class="meta">Basato su: ${SKS_FMT.esc(r.basis)}.</p>
-      <p><button type="button" class="link-small" data-sz-restart>Rifai il test</button></p>`;
-    show('result');
-    result.querySelector('button')?.focus();
-  }
-
-  form.addEventListener('click', e => {
-    const u = e.target.closest('[data-usual]');
-    if (u) { state.usual = u.dataset.usual; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', String(b === u))); err.hidden = true; return; }
-    const g = e.target.closest('[data-grp]');
-    if (g) { state[g.dataset.grp] = g.dataset.val; press(g.dataset.grp, g.dataset.val); return; }
-    if (e.target.closest('[data-sz-next]')) {
-      err.hidden = true;
-      if (shoes) { if (!state.usual) return fail('Scegli il numero che porti di solito.', $('[data-usual]', form)); store.set(KEY, { ...store.get(KEY, {}), usual: state.usual }); return render(estimate()); }
-      const h = +form.height.value, w = +form.weight.value;
-      if (!(h >= 100 && h <= 250)) return fail('Scrivi l’altezza in centimetri, per esempio 175.', form.height);
-      if (!(w >= 30 && w <= 250)) return fail('Scrivi il peso in chili, per esempio 70.', form.weight);
-      show(2); $('[data-sz-step="2"] .sz-chip[aria-pressed="true"]', form)?.focus(); return;
-    }
-    if (e.target.closest('[data-sz-back]')) { show(1); return; }
-    if (e.target.closest('[data-sz-restart]')) { show(1); return; }
-    if (e.target.closest('[data-sz-forget]')) { store.set(KEY, {}); form.reset(); state.usual = null; $$('[data-usual]', form).forEach(b => b.setAttribute('aria-pressed', 'false')); show(1); toast('Dati della taglia cancellati da questo browser.'); return; }
-    const how = e.target.closest('[data-sz-how]');
-    if (how) { const box = $('#sz-how'); box.hidden = !box.hidden; how.setAttribute('aria-expanded', String(!box.hidden)); return; }
-    const add = e.target.closest('[data-sz-add]');
-    if (add) {
-      // the buy box takes the size too, so the page and the cart agree
-      const r = $$('input[name="size"]').find(i => i.value === add.dataset.szAdd);
-      if (r && !r.checked) r.click();
-      addWithFeedback(add, { handle: P.handle, title: P.title, brand: P.brand, price: P.price, compareAt: P.compareAt, image: P.image }, add.dataset.szAdd);
-      return;
-    }
-    const nt = e.target.closest('[data-sz-notify]');
-    if (nt) { closeDialog(form.closest('dialog')); const l = $('[data-notify-label]'); if (l) l.textContent = nt.dataset.szNotify; setTimeout(() => openDialog('notify-dialog'), 340); }
-  });
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    store.set(KEY, { usual: state.usual, height: form.height?.value, weight: form.weight?.value, body: state.body, belly: state.belly, age: state.age, fit: state.fit });
-    render(estimate());
-  });
-  form.closest('dialog')?.addEventListener('dialog:open', () => { err.hidden = true; if (!result.hidden) return; show(1); });
 })();
 
 /* ---------- "Scelti per te": the sources of integrated1's for-you endpoint, on the device ----------
@@ -1448,273 +980,6 @@ document.addEventListener('click', e => {
     // a few matches open by themselves: the answer is what was searched for
     if (words.length && shown <= 3) items.forEach(({ d }) => { if (!d.hidden) { d.open = true; opened.push(d); } });
   });
-})();
-
-/* ---------- cart page, checkout summary, wishlist, search results ---------- */
-(() => {
-  // checkout summary lines
-  const lines = $('[data-checkout-lines]');
-  if (lines) {
-    const render = () => {
-      const l = Cart.lines;
-      lines.innerHTML = l.length ? l.map(x => `<li class="checkout-line"><img src="${SKS_FMT.cdn(x.image, 160)}" width="64" height="64" alt="" loading="lazy"><span><span class="meta" translate="no">${SKS_FMT.esc(x.brand)}</span><br>${SKS_FMT.esc(x.title)}<br><span class="meta">${SKS_FMT.esc(SKS_FMT.sizeLabel(x.size))} · quantità ${x.qty}</span></span><span class="tabular">${SKS_FMT.money(x.price * x.qty)}</span></li>`).join('')
-        : `<li class="muted">Il carrello è vuoto. <a href="${BASE}index.html">Torna alla home</a></li>`;
-    };
-    document.addEventListener('cart:change', render); render();
-  }
-  // wishlist page
-  const wg = $('[data-wish-grid]');
-  if (wg) {
-    const render = () => {
-      const list = Wish.list.filter(x => x.title);
-      $('[data-wish-empty]').hidden = !!list.length;
-      registerCards(list.map(x => ({ ...x, images: x.images || [] })));
-      wg.innerHTML = list.map(x => {
-        // every size, the sold-out ones struck through with "Avvisami", as on the product page
-        const all = x.sizes || [], sizes = all.filter(s => s[1]), sold = all.length - sizes.length;
-        const card = SKS_CARD.render({ ...x, images: (x.images || []).filter(Boolean), sizes: [], swatches: [] }, { base: BASE });
-        const buy = sizes.length
-          ? `<form class="wish-buy" data-wish-buy="${SKS_FMT.esc(x.handle)}" novalidate><fieldset class="look-sizes"><legend class="visually-hidden">Taglia</legend>${all.map(s => `<label class="look-size${s[1] ? '' : ' is-sold'}"><input type="radio" name="w-${SKS_FMT.esc(x.handle)}" value="${SKS_FMT.esc(s[0])}" ${s[1] ? (sizes.length === 1 ? 'checked' : '') : 'disabled'}><span>${SKS_FMT.esc(s[0])}</span></label>`).join('')}</fieldset><p class="field__error" data-wish-error hidden>Scegli una taglia.</p>${sold ? `<p class="meta">Taglia esaurita? <button type="button" class="link-small" data-wish-notify>Avvisami</button></p>` : ''}<button type="submit" class="button button--primary button--small">Aggiungi al carrello</button></form>`
-          : `<p class="meta wish-buy">Esaurito in tutte le taglie. <button type="button" class="link-small" data-wish-notify>Avvisami</button></p>`;
-        return `<div class="wish-item">${card}${buy}</div>`;
-      }).join('');
-      renderWishState();
-    };
-    document.addEventListener('wish:change', render); render();
-    wg.addEventListener('submit', e => {
-      const f = e.target.closest('[data-wish-buy]'); if (!f) return;
-      e.preventDefault();
-      const size = (f.querySelector('input:checked') || {}).value;
-      const err = f.querySelector('[data-wish-error]');
-      if (!size) { err.hidden = false; f.querySelector('input:not([disabled])')?.focus(); return; }
-      addWithFeedback(f.querySelector('button'), infoFromCard(f.dataset.wishBuy), size);
-    });
-    wg.addEventListener('change', e => { const err = e.target.closest('[data-wish-buy]')?.querySelector('[data-wish-error]'); if (err) err.hidden = true; });
-    wg.addEventListener('click', e => { if (e.target.closest('[data-wish-notify]')) toast('Anteprima: sul sito ti avvisiamo quando torna disponibile.'); });
-  }
-  // search results page
-  const sp = $('[data-search-page]');
-  if (sp) {
-    const q = new URLSearchParams(location.search).get('q') || '';
-    const input = $('#search-page-input'); input.value = q;
-    if (!q) { $('[data-search-page-count]').textContent = 'Scrivi cosa cerchi: un capo, una marca, una categoria.'; return; }
-    if (trackingOK()) { try { sessionStorage.setItem('sks-last-q', q); } catch { /* private mode */ } }
-    $('[data-search-title]').textContent = `Risultati per “${q}”`;
-    document.title = `Risultati per “${q}” | Ski Sises`;
-    window.SKS_SEARCH_API.loadIndex().then(index => {
-      const r = window.SKS_SEARCH_API.search(index, q);
-      const items = r.products.slice(0, 48).map(p => ({ handle: p[0], title: p[1], brand: p[2], price: p[5], compareAt: p[7] || 0, images: [p[6]], sizes: [], swatches: [] }));
-      registerCards(items);
-      $('[data-search-page-count]').textContent = `${r.products.length} prodotti`;
-      $('[data-search-page-grid]').innerHTML = items.map(p => SKS_CARD.render(p, { base: BASE })).join('');
-      $('[data-search-page-side]').innerHTML = [
-        r.brands.length ? `<p class="meta">Marche</p><ul class="chips" role="list">${r.brands.slice(0, 8).map(b => `<li><a class="chip" href="${BASE}collections/${b[0]}.html">${SKS_FMT.esc(b[1])} <span class="chip__count">${b[2]}</span></a></li>`).join('')}</ul>` : '',
-        r.colls.length ? `<p class="meta">Categorie</p><ul class="chips" role="list">${r.colls.slice(0, 8).map(c => `<li><a class="chip" href="${BASE}collections/${c[0]}.html">${SKS_FMT.esc(c[1])}</a></li>`).join('')}</ul>` : ''
-      ].join('');
-      $('[data-search-page-empty]').hidden = !!(r.products.length || r.brands.length || r.colls.length);
-      renderWishState();
-    });
-  }
-})();
-
-/* ---------- brand A-Z filter ---------- */
-(() => {
-  const input = $('[data-brand-filter]');
-  if (!input) return;
-  input.addEventListener('input', () => {
-    const q = SKS_FMT.normalize(input.value);
-    let shown = 0;
-    $$('[data-brand-name]').forEach(li => { const on = !q || li.dataset.brandName.includes(q); li.hidden = !on; if (on) shown++; });
-    $$('.brands-group').forEach(g => { g.hidden = !g.querySelector('[data-brand-name]:not([hidden])'); });
-    $('[data-brand-empty]').hidden = !!shown;
-    announce(`${shown} marche`);
-  });
-})();
-
-/* ---------- look page: each piece its size (chips), the button says how many it adds, added rows are marked ---------- */
-(() => {
-  const form = $('[data-look-form]');
-  if (!form) return;
-  const btn = $('[data-add-look]', form), status = $('[data-look-status]', form);
-  if (!btn) return; // every piece is sold out: the page says so, nothing to add
-  const rows = () => $$('[data-piece]', form).filter(li => !li.classList.contains('is-unavailable'));
-  const chosen = li => (li.querySelector('input[type="radio"]:checked') || {}).value;
-  const pending = () => rows().filter(li => chosen(li) && li.dataset.added !== chosen(li));
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  function sync() {
-    const p = pending(), missing = rows().filter(li => !chosen(li)).length;
-    const changes = p.filter(li => li.dataset.added).length, adds = p.length - changes, someAdded = rows().some(li => li.dataset.added);
-    btn.disabled = !p.length;
-    btn.textContent = p.length
-      ? (!changes ? `Aggiungi ${adds === 1 ? 'il capo' : `i ${adds} capi`} al carrello`
-        : !adds ? `Cambia ${changes === 1 ? 'la taglia' : `le ${changes} taglie`} nel carrello`
-        : `Aggiungi ${plural(adds, 'capo', 'capi')} e cambia ${changes === 1 ? 'una taglia' : `${changes} taglie`}`)
-      : !missing && someAdded ? 'Tutto nel carrello'
-      : someAdded ? `Scegli la taglia ${missing === 1 ? 'del capo rimanente' : `dei ${missing} capi rimanenti`}` : 'Scegli le taglie';
-    if (status && !status.dataset.sticky) status.textContent = missing ? `${plural(missing, 'capo', 'capi')} senza taglia: ${missing === 1 ? 'sceglila per aggiungerlo' : 'sceglila per aggiungerli'}.` : 'Tutte le taglie scelte.';
-  }
-  form.addEventListener('change', () => { if (status) delete status.dataset.sticky; sync(); });
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const add = pending();
-    if (!add.length) return;
-    const items = add.map(li => [infoFromCard(li.dataset.piece), chosen(li), li]).filter(x => x[0]);
-    // a piece already in the bag in another size: that line is replaced, never doubled
-    const changed = items.filter(([info, , li]) => li.dataset.added && Cart.remove(info.handle + '|' + li.dataset.added));
-    const [first, ...rest] = items;
-    for (const [info, size] of rest) Cart.add(info, size);
-    await addWithFeedback(btn, first[0], first[1]);
-    for (const [, size, li] of items) { li.dataset.added = size; li.classList.add('is-added'); const t = li.querySelector('.look-piece__title'); if (t) t.dataset.added = size; }
-    const missing = rows().filter(li => !chosen(li)).length, added = items.length - changed.length;
-    if (status) {
-      status.dataset.sticky = '1';
-      status.textContent = [added ? `${plural(added, 'capo aggiunto', 'capi aggiunti')} al carrello.` : '', changed.length ? `${changed.length === 1 ? 'Taglia cambiata' : `${changed.length} taglie cambiate`} nel carrello.` : '', missing ? `${plural(missing, 'capo', 'capi')} senza taglia.` : ''].filter(Boolean).join(' ');
-    }
-    sync();
-    setTimeout(sync, 1900); // after the shared "Aggiunto" feedback restores its label
-  });
-  sync();
-})();
-
-/* ---------- storia: one pinned timeline, the year column and the ski track in the same scroll() ---------- */
-(() => {
-  const root = $('[data-storia]');
-  if (!root) return;
-  const year = $('[data-storia-year]', root), path = $('.storia__track path', root);
-  const chapters = $$('.chapter', root);
-  // the visible year follows the chapter crossing the middle of the screen (IntersectionObserver)
-  const io = new IntersectionObserver(entries => {
-    for (const e of entries) if (e.isIntersecting && year.textContent !== e.target.dataset.year) {
-      year.textContent = e.target.dataset.year;
-      if (MOTION_OK()) animate(year, { opacity: [0, 1], transform: ['translateY(12px)', 'none'] }, { duration: 0.48, easing: [0.16, 1, 0.3, 1] });
-    }
-  }, { rootMargin: '-45% 0px -45% 0px' });
-  chapters.forEach(c => io.observe(c));
-  if (MOTION_OK() && matchMedia('(min-width: 1024px)').matches) {
-    path.style.strokeDasharray = '1';
-    scroll(animate(path, { strokeDashoffset: [1, 0] }, { easing: 'linear' }), { target: root, offset: ['start center', 'end end'] });
-  }
-})();
-
-/* ---------- rental quote: tariffs and cost logic of noleggio-simulatore-preventivo.liquid ---------- */
-(() => {
-  const el = $('rental-quote');
-  if (!el || !window.SKS_RENTAL) return;
-  const D = window.SKS_RENTAL;
-  const s = { cat: 'sci', who: 'adulto', vi: 0, mode: 'day', days: 1, qty: 1, si: 0 };
-  const sel = n => el.querySelector(`[data-rq="${n}"]`);
-  const variants = () => D[s.cat].variants[s.who] || [];
-  const v = () => variants()[s.vi];
-  const hasDay = x => x && x.d && Object.values(x.d).some(p => p != null);
-  // minimum cost covering at least `days` using the available brackets (same dynamic programme as the live page)
-  function dayPrice(d, days) {
-    const br = Object.entries(d).filter(([, p]) => p != null).map(([g, p]) => ({ g: +g, p: +p }));
-    if (!br.length) return null;
-    const dp = [0];
-    for (let n = 1; n <= days; n++) { let best = Infinity; for (const b of br) best = Math.min(best, b.p + dp[Math.max(0, n - b.g)]); dp[n] = best; }
-    return dp[days];
-  }
-  function fill() {
-    sel('cat').innerHTML = Object.entries(D).map(([k, c]) => `<option value="${k}" ${k === s.cat ? 'selected' : ''}>${c.label}</option>`).join('');
-    const both = !!(D[s.cat].variants.adulto && D[s.cat].variants.bambino);
-    $('[data-rq-who-wrap]', el).hidden = !both;
-    if (!both) s.who = D[s.cat].variants.adulto ? 'adulto' : 'bambino';
-    $$('[data-rq-who]', el).forEach(b => b.setAttribute('aria-checked', String(b.dataset.rqWho === s.who)));
-    sel('variant').innerHTML = variants().map((x, i) => `<option value="${i}" ${i === s.vi ? 'selected' : ''}>${x.name}</option>`).join('');
-    const cur = v();
-    const canDay = hasDay(cur), canSeason = !!(cur && cur.s && cur.s.length);
-    if (s.mode === 'day' && !canDay) s.mode = 'season';
-    if (s.mode === 'season' && !canSeason) s.mode = 'day';
-    $$('[data-rq-mode]', el).forEach(b => { const m = b.dataset.rqMode; b.disabled = m === 'day' ? !canDay : !canSeason; b.setAttribute('aria-checked', String(m === s.mode)); });
-    $('[data-rq-days-wrap]', el).hidden = s.mode !== 'day';
-    $('[data-rq-season-wrap]', el).hidden = s.mode !== 'season';
-    if (canSeason) sel('season').innerHTML = cur.s.map((x, i) => `<option value="${i}" ${i === s.si ? 'selected' : ''}>${x.n} · ${SKS_FMT.money(x.p)}</option>`).join('');
-    compute();
-  }
-  const lines = [];
-  // "Casco", not "Casco Casco"; "Scarponi da sci", not "Scarponi Sci" (same rule as the price list)
-  const itemName = (label, name) => name.toLowerCase().startsWith(label.toLowerCase()) ? name : label === 'Scarponi' ? `Scarponi da ${name.charAt(0).toLowerCase()}${name.slice(1)}` : `${label} ${name}`;
-  const fmtDate = v => v ? new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric', month: 'long' }).format(new Date(v + 'T12:00:00')) : '';
-  // the line being prepared: same tariff logic as the live simulator
-  function current() {
-    const cur = v(); if (!cur) return null;
-    let unit, label, note = '';
-    if (s.mode === 'season') { const x = cur.s[s.si] || cur.s[0]; unit = x.p; label = x.n; }
-    else {
-      unit = dayPrice(cur.d, s.days); label = `${s.days} ${s.days === 1 ? 'giorno' : 'giorni'}`;
-      const seasonMin = cur.s && cur.s.length ? Math.min(...cur.s.map(x => x.p)) : null;
-      if (seasonMin != null && unit > seasonMin) {
-        if (cur.s.length === 1) { note = `Per ${s.days} giorni conviene la stagionale: applichiamo ${SKS_FMT.money(seasonMin)} invece di ${SKS_FMT.money(unit)}.`; unit = seasonMin; label += ' · tariffa stagionale'; }
-        else note = `Per ${s.days} giorni conviene una tariffa stagionale, da ${SKS_FMT.money(seasonMin)}.`;
-      }
-    }
-    const who = $('[data-rq-who-wrap]', el).hidden ? '' : (s.who === 'bambino' ? 'Bambino · ' : 'Adulto · ');
-    const key = [s.cat, s.who, s.vi, s.mode, s.mode === 'day' ? s.days : s.si].join('|');
-    return { key, cat: s.cat, who: s.who, title: itemName(D[s.cat].label, cur.name), sub: `${who}${label}${s.qty > 1 ? ` · ×${s.qty}` : ''}`, unit, qty: s.qty, total: unit * s.qty, note };
-  }
-  function compute() {
-    const c = current(); if (!c) return;
-    $('[data-rq-out="days"]', el).textContent = s.days;
-    $('[data-rq-out="qty"]', el).textContent = s.qty;
-    $('[data-rq-line]', el).textContent = `${c.title} · ${c.sub}: ${SKS_FMT.money(c.total)}`;
-    const n = $('[data-rq-note]', el); n.hidden = !c.note; n.textContent = c.note;
-    const list = $('[data-rq-lines]', el);
-    list.innerHTML = lines.map((l, i) => `<li class="rq-line"><span><strong>${SKS_FMT.esc(l.title)}</strong><br><span class="meta">${SKS_FMT.esc(l.sub)}</span></span><span class="tabular">${SKS_FMT.money(l.total)}</span><button type="button" class="icon-button" data-rq-remove="${i}" aria-label="Togli ${SKS_FMT.esc(l.title)} dal preventivo"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></li>`).join('');
-    const total = lines.length ? lines.reduce((t, l) => t + l.total, 0) : c.total;
-    $('[data-rq-total]', el).textContent = SKS_FMT.money(total);
-    const d = el.querySelector('[data-rq-date]')?.value, p = $('[data-rq-pickup]', el);
-    p.hidden = !d; p.textContent = d ? `Ritiro in negozio: ${fmtDate(d)}` : '';
-  }
-  // the same item for the same duration is one line: adding it again updates it (journey: skis counted twice)
-  function addLine() {
-    const c = current(); if (!c) return;
-    const i = lines.findIndex(l => l.key === c.key);
-    if (i >= 0) { lines[i] = c; compute(); toast(`${c.title} è già nel preventivo: riga aggiornata.`); return; }
-    lines.push(c); compute(); announce(`${c.title} aggiunto al preventivo`);
-  }
-  function pack() {
-    const keep = { ...s }, skipped = [];
-    const items = s.who === 'bambino'
-      ? [['sci', 'bambino', 0], ['scarponi', 'bambino', 0], ['casco', 'bambino', 0]]
-      : [['sci', 'adulto', 0], ['scarponi', 'adulto', 0], ['casco', 'adulto', 0]];
-    for (const [cat, who, vi] of items) {
-      if (lines.some(l => l.cat === cat && l.who === who)) { skipped.push(D[cat].label.toLowerCase()); continue; }
-      s.cat = cat; s.who = who; s.vi = vi; s.si = 0; if (!hasDay(v())) s.mode = 'season'; const c = current(); if (c) lines.push(c);
-    }
-    Object.assign(s, keep);
-    fill();
-    if (skipped.length) toast(`Pacchetto sci aggiunto. Già nel preventivo: ${skipped.join(', ')}.`);
-    else announce('Pacchetto sci aggiunto al preventivo');
-  }
-  el.addEventListener('change', e => {
-    const k = e.target.dataset.rq; if (!k) return;
-    if (k === 'cat') { s.cat = e.target.value; s.vi = 0; s.si = 0; s.who = 'adulto'; }
-    if (k === 'variant') { s.vi = +e.target.value; s.si = 0; }
-    if (k === 'season') s.si = +e.target.value;
-    fill();
-  });
-  el.addEventListener('click', e => {
-    const w = e.target.closest('[data-rq-who]'); if (w) { s.who = w.dataset.rqWho; s.vi = 0; s.si = 0; fill(); return; }
-    const m = e.target.closest('[data-rq-mode]'); if (m && !m.disabled) { s.mode = m.dataset.rqMode; fill(); return; }
-    const st = e.target.closest('[data-rq-step]');
-    if (st) { const k = st.dataset.rqStep; s[k] = Math.max(1, Math.min(k === 'days' ? 30 : 10, s[k] + +st.dataset.dir)); compute(); return; }
-    if (e.target.closest('[data-rq-add]')) { addLine(); return; }
-    if (e.target.closest('[data-rq-pack]')) { pack(); return; }
-    const rm = e.target.closest('[data-rq-remove]'); if (rm) { lines.splice(+rm.dataset.rqRemove, 1); compute(); return; }
-    if (e.target.closest('[data-rq-send]')) {
-      const d = el.querySelector('[data-rq-date]').value;
-      toast(`Anteprima: sul sito si apre WhatsApp con il preventivo già scritto${d ? ' e la data di ritiro' : ''}. Nessun messaggio inviato.`);
-    }
-  });
-  const dateIn = el.querySelector('[data-rq-date]');
-  if (dateIn) {
-    dateIn.min = new Date().toISOString().slice(0, 10);
-    dateIn.addEventListener('change', () => {
-      if (dateIn.value && new Date(dateIn.value + 'T12:00:00').getDay() === 0) { dateIn.value = ''; toast('La domenica il negozio è chiuso: scegli un altro giorno.'); }
-      compute();
-    });
-  }
-  fill();
 })();
 
 /* ---------- cookie choice, then the -10% teaser ----------
@@ -1908,3 +1173,5 @@ document.addEventListener('click', e => {
   }, 1200);
   if (!store.get('sks-comments-hint', false)) addEventListener('scroll', hint, { once: true, passive: true });
 })();
+
+export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, Wish, renderWishState, Recent, initRail, ForYou };
