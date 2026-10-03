@@ -450,13 +450,21 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
     <h2 class="d2" id="newsletter-home-title">Iscriviti alla newsletter</h2>
     <p class="lead" data-store-copy>Vogliamo esserti utili, ti comunicheremo solamente gli sconti ed eventuali nuove collezioni di tuo interesse.</p>
     <p data-store-copy>Sei ancora indeciso? Ti diamo anche uno sconto del 10% sul tuo prossimo ordine all'iscrizione</p>
-    <form class="newsletter-form newsletter-home__form" data-proto-form="Iscrizione registrata solo in anteprima: nessuna email è stata inviata." data-source="home_newsletter">
+    <!-- the live form, field for field: Shopify's {% form 'customer' %} (POST /contact, form_type customer) with the hidden
+         contact[tags] "newsletter" and contact[email]; integrated1's tracker (product-intent-tracker.js) catches the
+         submit and sends the e-mail to /apps/intent/newsletter-identify (source = data-source). The two proposal fields
+         travel only on that call, so they ship with the integrated1 change of CHANGES §11.2b, never before -->
+    <form class="newsletter-form newsletter-home__form" method="post" action="/contact#newsletter-form-home" id="newsletter-form-home" data-proto-form="Iscrizione registrata solo in anteprima: nessuna email è stata inviata." data-source="home_newsletter">
+      <input type="hidden" name="form_type" value="customer">
+      <input type="hidden" name="contact[tags]" value="newsletter">
+      <!-- proposal (02/10, CRM): the name, read by the tracker (the route already takes firstName) -->
       <label class="visually-hidden" for="newsletter-home-name">Nome (facoltativo)</label>
-      <input class="field__input" id="newsletter-home-name" name="first_name" type="text" autocomplete="given-name" placeholder="Nome (facoltativo)">
+      <input class="field__input" id="newsletter-home-name" name="contact[first_name]" type="text" autocomplete="given-name" placeholder="Nome (facoltativo)">
       <label class="visually-hidden" for="newsletter-home-email">E-mail</label>
-      <input class="field__input" id="newsletter-home-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="E-mail" required>
+      <input class="field__input" id="newsletter-home-email" name="contact[email]" type="email" autocomplete="email" inputmode="email" placeholder="E-mail" required>
       <button type="submit" class="button button--on-dark">Iscriviti</button>
-      <!-- proposal (02/10, CRM): what the subscriber cares about, for the personas' cold start (the menu's own words) -->
+      <!-- proposal (02/10, CRM): what the subscriber cares about, for the personas' cold start (the menu's own words);
+           outside contact[...], so Shopify's form ignores them and only the tracker reads them -->
       <fieldset class="newsletter-home__interests">
         <legend>Ti interessa (facoltativo)</legend>
         <label class="chip-check"><input type="checkbox" name="interests" value="Uomo"><span>Uomo</span></label><label class="chip-check"><input type="checkbox" name="interests" value="Donna"><span>Donna</span></label><label class="chip-check"><input type="checkbox" name="interests" value="Bambini"><span>Bambini</span></label><label class="chip-check"><input type="checkbox" name="interests" value="Montagna"><span>Montagna</span></label><label class="chip-check"><input type="checkbox" name="interests" value="Corsa"><span>Corsa</span></label><label class="chip-check"><input type="checkbox" name="interests" value="Open-Air"><span>Open-Air</span></label>
@@ -485,9 +493,11 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
   </div></div>
   </div>
 </section><section class="sport-band scheme-forest" data-tone="dark" aria-labelledby="sport-title">
-  <svg class="ridge" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-  <path class="ridge__sky" d="M0 112 C11.7 110.7 45 104.7 70 104 C95 103.3 121.7 110.3 150 108 C178.3 105.7 211.7 92 240 90 C268.3 88 291.7 99.3 320 96 C348.3 92.7 383.3 73 410 70 C436.7 67 455 81 480 78 C505 75 533.3 54.3 560 52 C586.7 49.7 613.3 63 640 64 C666.7 65 693.3 55.3 720 58 C746.7 60.7 773.3 77.3 800 80 C826.7 82.7 853.3 72 880 74 C906.7 76 933.3 92.3 960 92 C986.7 91.7 1015 74.3 1040 72 C1065 69.7 1085 80.7 1110 78 C1135 75.3 1163.3 57.3 1190 56 C1216.7 54.7 1243.3 64.3 1270 70 C1296.7 75.7 1321.7 87.3 1350 90 C1378.3 92.7 1425 86.7 1440 86 V0 H0 Z"/>
-  <path class="ridge__line" pathLength="1" d="M0 112 C11.7 110.7 45 104.7 70 104 C95 103.3 121.7 110.3 150 108 C178.3 105.7 211.7 92 240 90 C268.3 88 291.7 99.3 320 96 C348.3 92.7 383.3 73 410 70 C436.7 67 455 81 480 78 C505 75 533.3 54.3 560 52 C586.7 49.7 613.3 63 640 64 C666.7 65 693.3 55.3 720 58 C746.7 60.7 773.3 77.3 800 80 C826.7 82.7 853.3 72 880 74 C906.7 76 933.3 92.3 960 92 C986.7 91.7 1015 74.3 1040 72 C1065 69.7 1085 80.7 1110 78 C1135 75.3 1163.3 57.3 1190 56 C1216.7 54.7 1243.3 64.3 1270 70 C1296.7 75.7 1321.7 87.3 1350 90 C1378.3 92.7 1425 86.7 1440 86"/>
+  <svg class="ridge" viewBox="-560 0 2560 160" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+  <rect class="ridge__sky" x="-560" y="-1" width="2560" height="161"/>
+  <path class="ridge__far" d="M-560 130 L-320 115.2 Q-300 114 -280.1 112 L-135.9 97.6 Q-120 96 -104.3 93.1 L-9.8 75.8 Q0 74 9.8 72 L82.2 57.6 Q90 56 97.8 57.8 L162.2 72.2 Q170 74 177.8 72.1 L282.2 45.9 Q290 44 297.6 41.5 L337.4 28.5 Q345 26 352.3 29.2 L392.7 46.8 Q400 50 408 49.6 L514 44.3 Q520 44 526 44.1 L644 45.9 Q650 46 655.7 44.2 L692.4 32.4 Q700 30 707.3 33.2 L744.5 49.6 Q750 52 756 51.5 L845 44.4 Q850 44 855 44.7 L934.1 55.2 Q940 56 945.9 55.2 L1052.1 41.1 Q1060 40 1067.7 37.9 L1112.3 26.1 Q1120 24 1127.6 26.4 L1164.3 38.2 Q1170 40 1175.9 40.9 L1242.1 50.8 Q1250 52 1257.9 53.1 L1330.1 62.7 Q1340 64 1349.8 66 L1446.3 85.3 Q1460 88 1473.9 89.5 L1630.1 105.9 Q1650 108 1670 108.9 L2000 124 V160 H-560 Z"/>
+  <path class="ridge__near" d="M-560 152 L-109.9 122 Q-80 120 -50.2 116.6 L40.1 106.3 Q60 104 78.7 96.9 L142.5 72.8 Q150 70 157.7 67.7 L204.6 54 Q218 50 231 55.1 L292.5 79.1 Q300 82 307.6 84.4 L344.4 95.6 Q352 98 359.3 94.6 L424.6 64.5 Q430 62 435.9 60.8 L465.1 55 Q470 54 474 51 L524.4 14.1 Q530 10 536.4 12.8 L578.5 31.6 Q584 34 589.9 33.1 L616.1 28.9 Q622 28 626.9 31.4 L693.4 77.4 Q700 82 706.6 77.5 L790 21.4 Q795 18 799.6 21.8 L844.2 58.8 Q848 62 852.4 59.6 L899.8 32.9 Q905 30 910.9 28.7 L958.2 18.2 Q968 16 977.9 17.4 L1004.1 20.9 Q1012 22 1018.8 26.2 L1073.2 59.8 Q1080 64 1087.8 65.9 L1124.2 74.6 Q1130 76 1135.4 73.3 L1183.7 49.1 Q1190 46 1196 49.5 L1255.1 84 Q1262 88 1269.8 86.3 L1310.2 77.7 Q1318 76 1325.5 78.9 L1387 102.9 Q1400 108 1413.9 109.4 L1500.1 118 Q1520 120 1539.9 121.8 L1676.1 133.9 Q1700 136 1724 136.8 L2000 146 V160 H-560 Z"/>
+  <path class="ridge__line" pathLength="1" d="M-560 152 L-109.9 122 Q-80 120 -50.2 116.6 L40.1 106.3 Q60 104 78.7 96.9 L142.5 72.8 Q150 70 157.7 67.7 L204.6 54 Q218 50 231 55.1 L292.5 79.1 Q300 82 307.6 84.4 L344.4 95.6 Q352 98 359.3 94.6 L424.6 64.5 Q430 62 435.9 60.8 L465.1 55 Q470 54 474 51 L524.4 14.1 Q530 10 536.4 12.8 L578.5 31.6 Q584 34 589.9 33.1 L616.1 28.9 Q622 28 626.9 31.4 L693.4 77.4 Q700 82 706.6 77.5 L790 21.4 Q795 18 799.6 21.8 L844.2 58.8 Q848 62 852.4 59.6 L899.8 32.9 Q905 30 910.9 28.7 L958.2 18.2 Q968 16 977.9 17.4 L1004.1 20.9 Q1012 22 1018.8 26.2 L1073.2 59.8 Q1080 64 1087.8 65.9 L1124.2 74.6 Q1130 76 1135.4 73.3 L1183.7 49.1 Q1190 46 1196 49.5 L1255.1 84 Q1262 88 1269.8 86.3 L1310.2 77.7 Q1318 76 1325.5 78.9 L1387 102.9 Q1400 108 1413.9 109.4 L1500.1 118 Q1520 120 1539.9 121.8 L1676.1 133.9 Q1700 136 1724 136.8 L2000 146"/>
 </svg>
   <div class="container sport-band__grid">
     <div class="sport-band__intro"><h2 class="d2 mask-title" id="sport-title"><span class="visually-hidden">Sport</span><span aria-hidden="true"><span class="w"><span style="--i:0">Sport</span></span></span></h2></div>
@@ -818,7 +828,6 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
   <button type="button" class="nl-pop__bubble" data-nl-toggle aria-expanded="false" aria-controls="nl-body" aria-label="Apri popup newsletter">-10%</button>
 </aside>
 <section class="cookie-banner" data-cookie-banner aria-labelledby="cookie-title" hidden>
-  <button type="button" class="cookie-banner__close" data-cookie="reject" aria-label="Chiudi senza accettare i cookie non necessari"><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button>
   <div class="cookie-banner__main" data-cookie-main>
     <p class="cookie-banner__title" id="cookie-title">Consenso ai cookie</p>
     <p class="cookie-banner__text" data-store-copy>Noi e i nostri partner, incluso Shopify, utilizziamo cookie e altre tecnologie per personalizzare la tua esperienza, mostrarti annunci ed eseguire analisi. Non utilizzeremo cookie o altre tecnologie per questi scopi senza il tuo consenso. Scopri di più nella nostra <a href="pages/gdpr-privacy-policy-1.html" >Informativa sulla privacy</a></p>

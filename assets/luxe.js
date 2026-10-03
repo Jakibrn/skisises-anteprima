@@ -1,4 +1,4 @@
-// luxe.js (core): built 2026-10-02. Motion uses the theme's own vendor.min.js (Motion One).
+// luxe.js (core): built 2026-10-03. Motion uses the theme's own vendor.min.js (Motion One).
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* Shared by the Node build (evaluated in a vm sandbox) and the browser bundle: no imports, no DOM. */
 var SKS_FMT = (function () {
@@ -1202,6 +1202,18 @@ document.addEventListener('click', e => {
     });
   } else start();
 
+  // the home and footer sign-ups are Shopify's customer form (POST /contact, tag "newsletter"); integrated1's tracker
+  // (product-intent-tracker.js) catches any form posting to /contact and sends the e-mail to newsletter-identify.
+  // The home form's name and interests travel on that call only after the integrated1 change (CHANGES §11.2b)
+  document.addEventListener('submit', e => {
+    const f = e.target.closest('.newsletter-form');
+    if (!f || !f.checkValidity()) return;
+    const source = f.dataset.source || f.id || 'newsletter_form';
+    trackEvent('request:apps/intent/newsletter-identify', { source, marketingConsent: true });
+    const name = f.querySelector('[name="contact[first_name]"]')?.value.trim(), interests = [...f.querySelectorAll('[name="interests"]:checked')].map(i => i.value);
+    if (name || interests.length) trackEvent('proposal:NEWSLETTER_PROFILE', { firstName: !!name, interests });
+    trackEvent('server:NEWSLETTER_IDENTIFIED', { source });
+  }, true);
   if (!pop) return;
   // using the form stops the shrink for this page
   const active = e => { if (e.target.closest('[data-nl-form]')) { pop.dataset.formActive = ''; disarm(); } };

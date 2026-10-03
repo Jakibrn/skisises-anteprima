@@ -928,9 +928,8 @@ body:has(.sticky-atc.is-visible) .nl-pop { bottom: calc(var(--sticky-h, 84px) - 
   border-radius: calc(var(--radius) * 2); box-shadow: 0 0 0 1px var(--line), 0 24px 60px -24px rgb(11 23 14 / .55); animation: cookie-in calc(var(--d-480) * var(--m) + .01ms) var(--ease-out) both; }
 @keyframes cookie-in { from { opacity: 0; translate: 0 calc(12px * var(--m)); } }
 .cookie-banner[hidden] { display: none; }
-.cookie-banner__close { position: absolute; top: var(--s2); right: var(--s2); width: 40px; height: 40px; display: grid; place-items: center; color: var(--ink-2); }
-.cookie-banner__close .icon { width: 18px; height: 18px; }
-.cookie-banner__title { font-family: var(--font-display); font-size: var(--fs-d4); line-height: 1.1; margin-bottom: var(--s2); padding-right: var(--s7); }
+/* no x (owner, 03/10): "Declina" on the first layer closes without consent */
+.cookie-banner__title { font-family: var(--font-display); font-size: var(--fs-d4); line-height: 1.1; margin-bottom: var(--s2); }
 .cookie-banner__text { font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.5; margin-bottom: var(--s4); }
 .cookie-banner__accept { width: 100%; min-height: 52px; font-size: 1rem; }
 .cookie-banner__more { display: flex; justify-content: center; align-items: center; gap: var(--s1); margin-top: var(--s2); font-size: var(--fs-xs); color: var(--ink-3); }
@@ -1144,7 +1143,8 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 .split__mini:hover .split__media img { transform: scale(1.025); }
 @media (max-width: 767px) { .split__more { gap: var(--s3); margin-top: var(--s6); } .split__mini-title { margin-top: var(--s2); font-size: 1.125rem; } }
 /* phones: both worlds in one glance, side by side, the second still a step lower */
-@media (max-width: 767px) { .split__grid { grid-template-columns: 1fr 1fr; gap: var(--s3); } .split__tile--b { margin-top: var(--s7); } .split__text { margin-top: var(--s3); gap: var(--s1); } .split__text .link-arrow { font-size: var(--fs-sm); } }
+/* phones: two equal tiles side by side, aligned (owner, 03/10: the offset second tile looked crooked by mistake) */
+@media (max-width: 767px) { .split__grid { grid-template-columns: 1fr 1fr; gap: var(--s3); } .split__tile--b { margin-top: 0; } .split__text { margin-top: var(--s3); gap: var(--s1); } .split__text .link-arrow { font-size: var(--fs-sm); } }
 
 /* Nuovi arrivi */
 .tabs { display: flex; gap: var(--s2); }
@@ -1171,9 +1171,12 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 
 /* sport band (forest) with the ridge line */
 .sport-band { position: relative; padding-block: calc(var(--section) + 40px) var(--section); overflow: hidden; }
-.ridge { position: absolute; left: 0; top: -1px; width: 100%; height: calc(clamp(44px, 8.33vw, 120px) + 1px); } /* scales with the width: the same gentle slopes on a phone */
-/* above the line, the colour of the section before (the page's stone on the home) */
+.ridge { position: absolute; left: 0; top: -1px; width: 100%; height: calc(clamp(64px, 11.11vw, 160px) + 1px); } /* the drawing keeps its proportions (slice) */
+/* the sky is the colour of the section before (the page's stone on the home); the far range a paler green-grey; the
+   near range the band's own forest, so the band starts with the skyline */
 .ridge__sky { fill: var(--stone); }
+.ridge__far { fill: color-mix(in oklch, var(--stone) 84%, var(--forest-950)); }
+.ridge__near { fill: var(--forest-950); }
 .ridge__line { fill: none; stroke: var(--green-500); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 0; }
 .sport-band__grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s7) clamp(var(--s6), 5vw, var(--s9)); align-items: center; }
 .sport-band__intro { grid-column: 1 / -1; }
@@ -1442,10 +1445,13 @@ ul.type-chips, ul.type-tiles { scroll-padding-inline: var(--gutter); }
   .product__media-list { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 0; margin-inline: calc(-1 * var(--gutter)); scrollbar-width: none; }
   .product__media-list::-webkit-scrollbar { display: none; }
   .product__media, .product__media--main { flex: 0 0 100%; aspect-ratio: 1; scroll-snap-align: center; }
-  .product__dots { display: flex; justify-content: center; gap: 2px; margin-top: var(--s2); }
-  .product__dot { width: 28px; height: 28px; display: grid; place-items: center; }
-  .product__dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); transition: background-color var(--d-160) linear, transform var(--d-160) var(--ease-out); }
-  .product__dot[aria-current]::before { background: var(--ink); transform: scale(1.15); }
+  /* the photos' position as in Instagram stories (owner, 03/10): one dash per photo on the photo's bottom edge, the
+     current one in the shop's green; no row of its own under the photo */
+  .product__gallery { position: relative; }
+  .product__dots { position: absolute; z-index: 2; bottom: 0; left: calc(-1 * var(--gutter)); right: calc(-1 * var(--gutter)); display: flex; gap: 4px; padding: 0 var(--gutter) 10px; pointer-events: none; }
+  .product__dot { flex: 1 1 0; min-width: 0; height: 24px; display: flex; align-items: flex-end; pointer-events: auto; }
+  .product__dot::before { content: ""; width: 100%; height: 3px; border-radius: 2px; background: rgb(19 25 20 / .14); transition: background-color var(--d-160) linear; }
+  .product__dot[aria-current]::before { background: var(--green-500); }
 }
 .sticky-atc { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: color-mix(in srgb, var(--snow) 96%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: var(--s3) 0 calc(var(--s3) + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform calc(var(--d-320) * var(--m) + .01ms) var(--ease-out); }
 .sticky-atc.is-visible { transform: none; }
