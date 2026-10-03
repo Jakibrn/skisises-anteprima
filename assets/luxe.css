@@ -1170,8 +1170,18 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 @media (max-width: 1023px) { .looks-rail__head { grid-template-columns: 1fr; } .look-card { width: 72vw; } }
 
 /* sport band (forest) with the ridge line */
-.sport-band { position: relative; padding-block: calc(var(--section) + 40px) var(--section); overflow: hidden; }
-.ridge { position: absolute; left: 0; top: -1px; width: 100%; height: calc(clamp(64px, 11.11vw, 160px) + 1px); } /* the drawing keeps its proportions (slice) */
+.sport-band { position: relative; --ridge-h: clamp(100px, 15.56vw, 224px); padding-block: calc(var(--ridge-h) + clamp(32px, 2vw + 24px, 56px)) var(--section); overflow: hidden; }
+/* the drawing keeps its proportions (slice): one design unit is --u pixels, the labels sit on the same grid */
+.ridge { position: absolute; left: 0; top: -1px; width: 100%; height: calc(var(--ridge-h) + 1px); container-type: inline-size; }
+.ridge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ridge__peaks { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; --u: max(100cqw / 2560, var(--ridge-h) / 224); }
+/* a thin flag from the summit up, the name and the height beside it */
+.ridge__peak { position: absolute; left: calc(50% + (var(--x) - 720) * var(--u)); top: calc(100% - (160 - var(--y)) * var(--u)); translate: 0 calc(-100% - 4px);
+  display: grid; padding: 0 0 10px 6px; border-left: 1px solid color-mix(in oklch, var(--ink) 38%, transparent); font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.ridge__peak--left { translate: calc(-100% + 1px) calc(-100% - 4px); padding: 0 6px 10px 0; border-left: 0; border-right: 1px solid color-mix(in oklch, var(--ink) 38%, transparent); text-align: right; }
+.ridge__name { color: var(--ink-2); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.ridge__m { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+@media (max-width: 699px) { .ridge__peak--wide { display: none; } .ridge__peak { font-size: 10px; padding-bottom: 6px; } }
 /* the sky is the colour of the section before (the page's stone on the home); the far range a paler green-grey; the
    near range the band's own forest, so the band starts with the skyline */
 .ridge__sky { fill: var(--stone); }
@@ -2417,6 +2427,9 @@ html.motion-ready:not(.reduce-motion) .reveal-image:not(.is-in) img { transform:
 /* 12. ridge line, drawn once on entry */
 html.motion-ready:not(.reduce-motion) .ridge:not(.is-in) .ridge__line { stroke-dashoffset: 1; }
 .ridge.is-in .ridge__line { transition: stroke-dashoffset 1600ms var(--ease-mask); }
+/* the peaks' names come in as the line reaches them */
+html.motion-ready:not(.reduce-motion) .ridge:not(.is-in) .ridge__peak { opacity: 0; }
+.ridge.is-in .ridge__peak { transition: opacity var(--d-480) var(--ease-out) calc(600ms + var(--x) * .6ms); }
 
 /* 2. cross-document View Transitions (Chrome 126+, Safari 18.2+): a short crossfade; the header keeps its
       own name so it never flickers; the product image morphs via the shared name set in pageswap */
