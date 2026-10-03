@@ -1,5 +1,5 @@
 // luxe-product.js: built 2026-10-03. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, REEL, rollText, spinText, DOODLES, doodle, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, PHONE_SHEET, sheetStops, snapSheet, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, sizeSheet, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- product page ---------- */
 (() => {
@@ -140,8 +140,13 @@ import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from '
     if (!ship) return;
     const total = Cart.subtotal() + (Cart.lines.some(l => l.handle === P.handle) ? 0 : P.price);
     // the live strings (product.shipping.free_shipping / add_for_free_shipping, amount without trailing zeros)
-    const left = 50 - total, amount = Number.isInteger(left) ? `${left}€` : SKS_FMT.money(left);
-    ship.innerHTML = total >= 50 ? '<strong>Spedizione gratuita</strong>' : `Aggiungi <strong>${amount}</strong> per la spedizione gratuita`;
+    const left = 50 - total, amount = Number.isInteger(left) ? `${left}€` : SKS_FMT.money(left), state = total >= 50 ? 'free' : 'left';
+    // the amount rolls to its new value when the bag changes (owner, 03/10), once the bag is closed again
+    if (state === 'left' && ship.dataset.state === 'left') { rollText(ship.querySelector('strong'), amount); return; }
+    if (ship.dataset.state === state) return;
+    ship.dataset.state = state;
+    ship.innerHTML = state === 'free' ? '<strong>Spedizione gratuita</strong>' : 'Aggiungi <strong></strong> per la spedizione gratuita';
+    if (state === 'left') rollText(ship.querySelector('strong'), amount);
   };
   shipLine();
   document.addEventListener('cart:rendered', shipLine);

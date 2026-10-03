@@ -1,5 +1,5 @@
 // popups.js: built 2026-10-03. Motion uses the theme's own vendor.min.js (Motion One).
-import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
+import { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, REEL, rollText, spinText, DOODLES, doodle, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, PHONE_SHEET, sheetStops, snapSheet, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, sizeSheet, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou } from './luxe.js';
 import { animate, inView, scroll, stagger, timeline, PhotoSwipeLightbox } from 'vendor';
 /* ---------- wishlist heart (stands in for the back-in-stock app's wishlist-heart.js, block wishlist-app-embed):
    the live flow and copy. A heart opens one modal with the product, its sizes ("Disponibile", or a bell and
@@ -362,7 +362,7 @@ function mountAdvisor(d, P) {
     const note = r.pct >= 90 ? 'misure al centro della taglia' : r.pct >= 70 ? 'buona vestibilità' : r.pct >= 50 ? 'valuta anche la taglia vicina' : 'stima indicativa';
     const dots = '●'.repeat(Math.round(r.pct / 25)).padEnd(4, '○');
     result.innerHTML = `<p class="sz-result__label">La tua taglia consigliata</p>
-      <p class="sz-result__size">${esc(label)}</p>
+      <p class="sz-result__size"><span class="doodle-mark doodle-mark--loop">${esc(label)}${doodle('loop')}</span></p>
       <p class="sz-result__conf"><span aria-hidden="true">${dots}</span> Compatibilità ${r.pct}%: ${note}</p>
       ${s && !s[1] ? `<p class="sz-result__warn">La taglia consigliata per te è ${esc(label)}, ma non è disponibile in questo colore.</p>
         <button type="button" class="button button--outline button--block" data-sz-notify="${esc(label)}">Avvisami quando torna la ${esc(label)}</button>`

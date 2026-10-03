@@ -421,6 +421,34 @@ dialog.drawer:not([open]) { display: none; }
 html.reduce-motion .drawer { transition: opacity var(--d-160) linear, display var(--d-160) allow-discrete, overlay var(--d-160) allow-discrete; transform: none; opacity: 0; }
 html.reduce-motion .drawer[open] { opacity: 1; }
 @starting-style { html.reduce-motion .drawer[open] { opacity: 0; } }
+/* bottom sheets on phones (data-sheet; 10-dialogs.js): the drawer rises from the bottom with a handle, rounded on
+   top, at the height its resting points give (inline height) or its content's; dragging follows the finger, the
+   release snaps */
+.sheet__handle { display: none; }
+@media (max-width: 767px) {
+  .drawer.drawer--sheet { inset: auto 0 0 0; width: 100%; height: auto; max-height: calc(100dvh - var(--s7)); border-radius: 16px 16px 0 0; transform: translateY(100%); }
+  .drawer.drawer--sheet[open] { transform: none; }
+  @starting-style { .drawer.drawer--sheet[open] { transform: translateY(100%); } }
+  .drawer--sheet.is-dragging { transition: none; }
+  .drawer--sheet.is-snapping { transition: height var(--d-240) var(--ease-out), translate var(--d-240) var(--ease-out); }
+  .sheet__handle { display: block; position: relative; flex: none; height: 22px; touch-action: none; cursor: grab; }
+  .sheet__handle::before { content: ""; position: absolute; left: 50%; top: 9px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line-strong); }
+  .drawer--sheet [data-sheet-grip] { touch-action: none; }
+  .drawer--sheet > .drawer__head { min-height: 52px; padding-top: 0; }
+}
+/* the sizes of a card on a phone (sizeSheet in 30-cart.js) */
+.size-sheet { gap: var(--s4); padding: 0 var(--gutter) calc(var(--s5) + env(safe-area-inset-bottom)); }
+.size-sheet__head { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: var(--s3); align-items: center; }
+.size-sheet__head img { width: 64px; height: 80px; object-fit: contain; background: #fff; }
+.size-sheet__brand { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.size-sheet__title { font-size: var(--fs-sm); line-height: 1.35; }
+.size-sheet__price { font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
+.size-sheet__price s { margin-left: var(--s1); font-weight: 400; color: var(--ink-3); }
+.size-sheet__sizes { margin: 0; padding: 0; border: 0; min-width: 0; }
+.size-sheet__sizes legend { margin-bottom: var(--s2); font-size: var(--fs-sm); }
+.size-sheet__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: var(--s2); }
+.size-sheet__grid .size-chip { min-height: 48px; }
+.size-sheet__view { justify-self: start; }
 .drawer__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); padding: var(--s3) var(--s4) var(--s3) var(--s5); border-bottom: 1px solid var(--line); min-height: 64px; }
 .drawer__title { font-size: var(--fs-d5); }
 .drawer__count { font-family: var(--font-text); font-size: var(--fs-sm); color: var(--ink-3); letter-spacing: 0; }
@@ -493,7 +521,9 @@ product-card { display: block; position: relative; }
 /* a phone swipes through the card's pictures (owner, 02/10); a pointer keeps the hover crossfade */
 .product-card__img--slide, .product-card__dots { display: none; }
 @media not ((hover: hover) and (pointer: fine)) {
-  .product-card__image-link { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+  /* the scroller paints the card's surface itself: Safari blends the packshots (multiply) only within a scroller's own
+     layer, so on a transparent scroller their white showed as a white box once the photos could swipe (owner, 03/10) */
+  .product-card__image-link { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; background-color: inherit; isolation: isolate; }
   .product-card__image-link::-webkit-scrollbar { display: none; }
   .product-card__image-link > .product-card__img--primary, .product-card__image-link > .product-card__img--slide { position: relative; inset: auto; display: block; flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
   .product-card__dots { display: flex; position: absolute; left: 50%; bottom: 10px; translate: -50% 0; gap: 4px; z-index: 2; pointer-events: none; }
@@ -737,7 +767,30 @@ html.is-commenting main { outline: 2px dashed color-mix(in srgb, var(--green-500
 /* ---------- cart drawer ---------- */
 .free-shipping { padding: var(--s3) var(--s5); border-bottom: 1px solid var(--line); background: var(--stone); }
 .free-shipping__text { font-size: var(--fs-sm); margin-bottom: var(--s2); }
-.free-shipping__text strong { font-weight: 600; }
+.free-shipping__text strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* numbers that roll to their new value (rollText in luxe.js): one reel per digit, an invisible digit holds its place
+   and its baseline, the reel turns by whole lines and lands without overshoot, left to right */
+.roll { display: inline-flex; font-variant-numeric: tabular-nums; }
+.roll__r { position: relative; display: inline-block; overflow: clip; }
+.roll__ph { visibility: hidden; }
+.roll__s { position: absolute; inset: 0 auto auto 0; display: flex; flex-direction: column; translate: 0 calc(var(--p) * -1lh); }
+.roll__s.is-go { transition: translate 640ms var(--ease-out) calc(160ms + var(--i) * 50ms); }
+.roll__s > span { height: 1lh; }
+
+/* hand-drawn marks (doodle in luxe.js): the shop's green, drawn once */
+.doodle-mark { position: relative; display: inline-block; }
+.doodle { position: absolute; max-width: none; overflow: visible; pointer-events: none; } /* wider than the words it marks */
+/* the stroke scales with the mark (no non-scaling-stroke: its dashes would not cover a stretched path), so it is
+   thicker where the mark is stretched, as a marker pen is */
+.doodle path { fill: none; stroke: var(--green-500); stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.doodle--under path { stroke-width: 4; }
+.doodle--loop path { stroke-width: 2.2; }
+.doodle.is-drawing path { animation: doodle-draw 760ms var(--ease-out) 260ms both; }
+@keyframes doodle-draw { from { stroke-dashoffset: 1; } }
+.doodle--under { left: -2%; width: 104%; bottom: -0.42em; height: 0.55em; }
+.doodle--loop { left: -14%; top: -22%; width: 128%; height: 146%; }
+.doodle-mark--loop { padding-inline: .12em; }
 .free-shipping__bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .free-shipping__bar span { display: block; height: 100%; background: var(--green-500); transform-origin: left; transform: scaleX(var(--pct, 0)); transition: transform calc(var(--d-640) * var(--m) + .01ms) var(--ease-out); }
 .cart-lines { display: grid; gap: var(--s5); }
@@ -1109,6 +1162,9 @@ html.reduce-motion .look-reel__sheet, html.reduce-motion .look-reel__scrim { tra
 .header--transparent.is-over-hero .header__item--gift .header__link { color: inherit; }
 .drawer-nav__link--gift { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); color: var(--green-700); }
 .drawer-nav__gift { width: 48px; height: auto; mix-blend-mode: multiply; }
+/* reduced motion: the marks are drawn and the numbers written at once */
+html.reduce-motion .doodle path { animation: none; }
+html.reduce-motion .roll__s { transition: none; }
 
 /* ================= HOME ================= */
 /* hero: picture at full opacity from the first frame; height capped so the 2048x768 source is never upscaled at 1x */
@@ -1466,7 +1522,7 @@ ul.type-chips, ul.type-tiles { scroll-padding-inline: var(--gutter); }
 .sticky-atc { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; background: color-mix(in srgb, var(--snow) 96%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: var(--s3) 0 calc(var(--s3) + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform calc(var(--d-320) * var(--m) + .01ms) var(--ease-out); }
 .sticky-atc.is-visible { transform: none; }
 .sticky-atc__inner { display: flex; align-items: center; gap: var(--s3) var(--s4); }
-.sticky-atc__thumb { width: 48px; height: 48px; object-fit: contain; background: var(--lichen); mix-blend-mode: multiply; flex: none; }
+.sticky-atc__thumb { width: 48px; height: 48px; object-fit: contain; mix-blend-mode: multiply; flex: none; } /* no tile of its own: the packshot's white melts into the bar */
 .sticky-atc__info { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .sticky-atc__title { font-size: var(--fs-sm); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sticky-atc__title span[translate] { font-weight: 600; }
@@ -1490,13 +1546,21 @@ ul.type-chips, ul.type-tiles { scroll-padding-inline: var(--gutter); }
 .sticky-atc__hint { margin-top: var(--s3); font-size: var(--fs-sm); color: var(--ink-2); }
 html:not(.reduce-motion) .sticky-atc__sheet:not([hidden]) { animation: sheet-in calc(var(--d-240) * var(--m) + .01ms) var(--ease-out); }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } }
+/* phones: the photo, the brand and the name stay (owner, 03/10: "perdo foto prodotto, titolo e brand"), in three short
+   lines beside the photo (brand, name, price), then the size and "Aggiungi"; the sale line runs on top */
 @media (max-width: 639px) {
-  .sticky-atc__thumb, .sticky-atc__title, .sticky-atc__add-more, .sticky-atc__price .price-list__off { display: none; }
-  .sticky-atc__inner { flex-wrap: wrap; }
-  .sticky-atc--sale .sticky-atc__info { display: contents; }
-  .sticky-atc--sale .sticky-atc__price { flex: 1; min-width: 0; }
+  .sticky-atc__add-more, .sticky-atc__price .price-list__off, .sticky-atc__size-label { display: none; }
+  .sticky-atc__inner { flex-wrap: wrap; gap: var(--s2); }
+  .sticky-atc__info { display: contents; }
+  .sticky-atc__thumb { width: 44px; height: 52px; }
+  .sticky-atc__text { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+  .sticky-atc__title { display: grid; grid-template-columns: minmax(0, 1fr); font-size: 13px; line-height: 1.25; }
+  .sticky-atc__title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .sticky-atc__brand { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+  .sticky-atc__price .price-list { font-size: 13px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
   .sticky-atc--sale .sale-line--compact { order: -1; flex: 1 0 100%; margin: 0 0 2px; }
-  .sticky-atc__add { padding: 0 var(--s5); }
+  .sticky-atc__size { padding: 0 var(--s2); gap: 4px; }
+  .sticky-atc__add { padding: 0 var(--s4); }
 }
 /* the sale line of snippets/sale-countdown.liquid: "Prezzo scontato" and the weekly countdown */
 .sale-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: var(--s2); font-size: var(--fs-xs); font-weight: 600; color: var(--brick); }

@@ -227,6 +227,54 @@ function toast(msg, action) {
   run();
 }
 
+/* ---------- numbers that roll to their new value (Arc's slot-text, in calm motion; owner, 03/10): each digit is a
+   reel that turns the way the number moved and lands without overshoot, the reels stopping left to right; the other
+   characters swap. It plays where the shopper sees it: in a closed dialog it waits for the dialog to open, under an
+   open dialog for that one to close. The first value and reduced motion just write the text. ---------- */
+const REEL = '01234567890123456789'.replace(/\d/g, '<span>$&</span>');
+function rollText(el, text) {
+  if (!el) return;
+  const first = !('rollValue' in el.dataset), from = el.dataset.rollValue;
+  el.dataset.rollValue = text;
+  if (from === text) return;
+  if (first || !MOTION_OK()) { clearTimeout(el._rollTimer); el.textContent = text; return; }
+  if (el._rollFrom != null) return; // a roll is on its way: it ends on the latest value
+  el._rollFrom = from;
+  const go = () => { const f = el._rollFrom; el._rollFrom = null; if (f === el.dataset.rollValue) el.textContent = f; else spinText(el, f, el.dataset.rollValue); };
+  // looked at on the next frame: an add changes the numbers and opens the bag in the same moment
+  requestAnimationFrame(() => {
+    const host = el.closest('dialog'), blocker = host ? (host.open ? null : host) : document.querySelector('dialog[open]');
+    if (!blocker) return go();
+    blocker.addEventListener(host ? 'dialog:open' : 'dialog:close', () => setTimeout(go, host ? 240 : 160), { once: true });
+  });
+}
+function spinText(el, from, to) {
+  clearTimeout(el._rollTimer);
+  const num = s => parseFloat(String(s).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+  const up = num(to) >= num(from), a = [...String(from)], b = [...to], off = a.length - b.length, ends = [];
+  // digits aligned from the right, where numbers keep their units
+  const html = b.map((ch, i) => {
+    if (!/\d/.test(ch)) return `<span>${SKS_FMT.esc(ch)}</span>`;
+    const f = /\d/.test(a[i + off] || '') ? +a[i + off] : 0, t = +ch;
+    ends.push(up ? (t >= f ? t : t + 10) : t);
+    return `<span class="roll__r"><span class="roll__ph">${ch}</span><span class="roll__s" style="--p:${up ? f : (t > f ? f + 10 : f)};--i:${ends.length - 1}">${REEL}</span></span>`;
+  }).join('');
+  el.innerHTML = `<span class="visually-hidden">${SKS_FMT.esc(to)}</span><span class="roll" aria-hidden="true">${html}</span>`;
+  const strips = el.querySelectorAll('.roll__s');
+  void el.offsetWidth; // the reels are painted at their start before they turn
+  strips.forEach((s, i) => { s.classList.add('is-go'); s.style.setProperty('--p', ends[i]); });
+  el._rollTimer = setTimeout(() => { el.textContent = to; }, 880 + 50 * strips.length);
+}
+
+/* ---------- hand-drawn marks (Space UI's doodle callout, in the shop's hand-drawn style: the reassurance icons, the
+   polaroids' handwriting; owner, 03/10): a stroke in the shop's green drawn once around or under what just happened.
+   Only two places: the advised size in the size advisor, the free shipping reached in the bag ---------- */
+const DOODLES = {
+  loop: ['0 0 120 64', 'M98 10C78 2 36 2 16 14C2 23 3 44 24 53C47 63 92 60 109 45C122 33 116 15 96 9C84 6 70 6 58 8'],
+  under: ['0 0 200 14', 'M3 9C38 4 72 11 106 7C134 4 166 5 197 8']
+};
+const doodle = (kind, draw = true) => `<svg class="doodle doodle--${kind}${draw && MOTION_OK() ? ' is-drawing' : ''}" viewBox="${DOODLES[kind][0]}" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path pathLength="1" d="${DOODLES[kind][1]}"/></svg>`;
+
 // card data registered by the build for every card on the page (+ cards rendered later)
 const CARDS = (() => { try { return JSON.parse($('#cards-json')?.textContent || '{}'); } catch { return {}; } })();
 function registerCards(list) { for (const p of list) CARDS[p.handle] = { t: p.title, b: p.brand, p: p.price, c: p.compareAt || 0, i: p.images[0], s: p.sizes }; }
@@ -285,6 +333,66 @@ document.addEventListener('close', e => {
   if (region) document.body.append(region);
   d.dispatchEvent(new CustomEvent('dialog:close'));
 }, true);
+
+/* ---------- bottom sheets on phones (Arc's bottom sheet; owner, 03/10): a drawer with data-sheet rises from the bottom
+   instead of the side. data-sheet lists its resting heights as parts of the screen ("0.64 0.92": the filters open at
+   two thirds and go to the top); empty, it is as tall as its content. The handle and the head drag it between them,
+   pulled down past the lowest (or flicked down) it closes, a tap on the handle switches height. The body scrolls
+   inside, and the foot ("Mostra N prodotti") stays in view at every height. ---------- */
+const PHONE_SHEET = matchMedia('(max-width: 767px)');
+const sheetStops = d => (d.dataset.sheet || '').split(/\s+/).filter(Boolean).map(f => Math.round(+f * innerHeight)).sort((a, b) => a - b);
+function snapSheet(d, height, translate = '') {
+  d.classList.add('is-snapping');
+  d.style.height = height ? `${height}px` : '';
+  d.style.translate = translate;
+  clearTimeout(d._snap);
+  d._snap = setTimeout(() => d.classList.remove('is-snapping'), 280);
+}
+document.addEventListener('dialog:open', e => {
+  const d = e.target;
+  if (!d.matches?.('[data-sheet]')) return;
+  const stops = sheetStops(d);
+  d.style.translate = '';
+  d.style.height = PHONE_SHEET.matches && stops.length ? `${stops[0]}px` : '';
+}, true);
+document.addEventListener('pointerdown', e => {
+  const grip = e.target.closest?.('[data-sheet] .sheet__handle, [data-sheet] [data-sheet-grip]');
+  if (!grip || !PHONE_SHEET.matches || e.button > 0) return;
+  if (!e.target.closest('.sheet__handle') && e.target.closest('button, a, input, select, label')) return; // the head's controls stay controls
+  const d = grip.closest('dialog'), stops = sheetStops(d), h0 = d.getBoundingClientRect().height, y0 = e.clientY;
+  const low = stops.length ? stops[0] : h0, top = stops.length ? stops.at(-1) : h0;
+  let last = [[performance.now(), y0]];
+  grip.setPointerCapture(e.pointerId);
+  d.classList.add('is-dragging');
+  const move = ev => {
+    const h = h0 - (ev.clientY - y0);
+    d.style.height = stops.length ? `${Math.round(Math.min(top, Math.max(low, h)))}px` : '';
+    d.style.translate = h < low ? `0 ${Math.round(low - h)}px` : '';
+    last.push([performance.now(), ev.clientY]); last = last.slice(-5);
+  };
+  const end = ev => {
+    grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', end); grip.removeEventListener('pointercancel', end);
+    d.classList.remove('is-dragging');
+    const dy = ev.clientY - y0, h = h0 - dy, v = (ev.clientY - last[0][1]) / Math.max(1, performance.now() - last[0][0]); // px/ms, down > 0
+    if (Math.abs(dy) < 6) {
+      // a tap on the handle switches between the resting heights
+      if (stops.length > 1 && e.target.closest('.sheet__handle')) snapSheet(d, h0 < top - 4 ? top : low);
+      else snapSheet(d, stops.length ? Math.round(h0) : 0);
+      return;
+    }
+    if (h < low - 80 || (v > 0.6 && dy > 24 && h0 <= low + 8)) {
+      snapSheet(d, stops.length ? low : 0, '0 100%');
+      setTimeout(() => { closeDialog(d); d.style.translate = ''; }, 240);
+      return;
+    }
+    if (!stops.length) { snapSheet(d, 0); return; }
+    // the nearest resting height; a flick goes on to the next one in its direction
+    let target = stops.reduce((b, st) => Math.abs(st - h) < Math.abs(b - h) ? st : b, low);
+    if (Math.abs(v) > 0.5) target = v < 0 ? (stops.find(st => st > h0 + 4) ?? top) : ([...stops].reverse().find(st => st < h0 - 4) ?? low);
+    snapSheet(d, target);
+  };
+  grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+});
 
 /* mobile menu: second-level panels */
 document.addEventListener('click', e => {
@@ -480,13 +588,22 @@ function renderCart(newKey) {
   });
   const text = $('[data-cart-count-text]'); if (text) text.textContent = count ? `(${count})` : '';
   const left = Math.max(0, FREE_SHIPPING - subtotal);
+  // the missing amount rolls to its new value; reaching free shipping underlines it by hand, once (owner, 03/10)
+  const state = !count ? 'empty' : left > 0 ? 'left' : 'free';
   $$('[data-shipping-text]').forEach(t => {
-    t.innerHTML = !count ? 'Spedizione gratuita in Italia per ordini superiori a €50'
-      : left > 0 ? `Ti mancano <strong>${SKS_FMT.money(left)}</strong> per ottenere la spedizione gratuita!`
-      : 'Hai diritto alla spedizione gratuita!';
+    const was = t.dataset.state;
+    if (was === state && state !== 'left') return;
+    t.dataset.state = state;
+    if (state === 'left') {
+      const amount = t.querySelector('[data-shipping-left]');
+      if (was === 'left' && amount) { rollText(amount, SKS_FMT.money(left)); return; }
+      t.innerHTML = 'Ti mancano <strong data-shipping-left></strong> per ottenere la spedizione gratuita!';
+      rollText(t.querySelector('[data-shipping-left]'), SKS_FMT.money(left));
+    } else t.innerHTML = state === 'empty' ? 'Spedizione gratuita in Italia per ordini superiori a €50'
+      : `<span class="doodle-mark">Hai diritto alla spedizione gratuita!${doodle('under', was === 'left' || was === 'empty')}</span>`;
   });
   $$('[data-shipping-bar]').forEach(b => b.style.setProperty('--pct', Math.min(1, subtotal / FREE_SHIPPING)));
-  $$('[data-cart-subtotal]').forEach(s => { s.textContent = SKS_FMT.money(subtotal); });
+  $$('[data-cart-subtotal]').forEach(s => rollText(s, SKS_FMT.money(subtotal)));
   // the loyalty widget's cart line ("Accedi per usare i tuoi punti sui prodotti non scontati.") when the cart earns points
   $$('[data-club-cart]').forEach(el => { el.hidden = !count || !SKS_FMT.clubPoints(subtotal); });
   $$('[data-cart-shipping]').forEach(s => { s.textContent = !count ? '' : left > 0 ? '5,90\u00a0€ in Italia' : 'gratuita in Italia'; });
@@ -552,9 +669,43 @@ async function addWithFeedback(button, info, size, openDrawer = true) {
   if (openDrawer) openDialog('cart-drawer', button);
 }
 
-// quick add from product cards: toggle opens the size row, a size adds; one-size products add directly
+/* ---------- on phones the "+" of a card with sizes opens them in a sheet from the bottom (Arc's bottom sheet; owner,
+   03/10): larger and within the thumb's reach, where the row inside a 170px card was cramped. Tablets and desktops
+   keep the row in the card. The sheet's copy is the product page's ("Taglia: scegli", "Vedi prodotto") ---------- */
+function sizeSheet(toggle) {
+  const card = toggle.closest('product-card'), h = card?.dataset.handle, c = h && CARDS[h];
+  if (!c || !c.s) return false;
+  // the card's own photo, already loaded, so the thumbnail is there at once
+  const thumb = card.querySelector('.product-card__img--primary')?.currentSrc || SKS_FMT.cdn(c.i, 160);
+  const esc = SKS_FMT.esc;
+  let d = document.getElementById('size-sheet');
+  if (!d) {
+    d = document.createElement('dialog');
+    d.id = 'size-sheet'; d.className = 'drawer drawer--sheet size-sheet'; d.dataset.sheet = '';
+    d.setAttribute('aria-labelledby', 'size-sheet-title');
+    document.body.append(d);
+  }
+  d.dataset.handle = h;
+  d.innerHTML = `<div class="sheet__handle" aria-hidden="true"></div>
+    <div class="size-sheet__head" data-sheet-grip>
+      <img src="${esc(thumb)}" alt="" width="64" height="80">
+      <div><p class="size-sheet__brand" translate="no">${esc(c.b)}</p><p class="size-sheet__title" id="size-sheet-title">${esc(c.t)}</p>
+        <p class="size-sheet__price">${SKS_FMT.money(c.p)}${c.c > c.p ? ` <s>${SKS_FMT.money(c.c)}</s>` : ''}</p></div>
+      <button type="button" class="icon-button" aria-label="Chiudi" data-close-dialog><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <fieldset class="size-sheet__sizes"><legend>Taglia: <span class="meta">scegli</span></legend>
+      <div class="size-sheet__grid">${c.s.map(([l, a]) => `<button type="button" class="size-chip" data-quick-size="${esc(l)}"${a ? '' : ' disabled aria-disabled="true"'}>${esc(l)}</button>`).join('')}</div>
+    </fieldset>
+    <a class="link-arrow size-sheet__view" href="${productUrl(h)}"><span>Vedi prodotto</span> <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></a>`;
+  openDialog('size-sheet', toggle);
+  d.querySelector('[data-quick-size]:not([disabled])')?.focus({ preventScroll: true });
+  return true;
+}
+
+// quick add from product cards: toggle opens the size row (a sheet on phones), a size adds; one-size products add directly
 document.addEventListener('click', e => {
   const toggle = e.target.closest('[data-quick-toggle]');
+  if (toggle && PHONE_SHEET.matches && sizeSheet(toggle)) return;
   if (toggle) {
     const sizes = toggle.parentElement.querySelector('.product-card__sizes');
     const open = toggle.getAttribute('aria-expanded') !== 'true';
@@ -566,7 +717,7 @@ document.addEventListener('click', e => {
   }
   const size = e.target.closest('[data-quick-size], [data-quick-add]');
   if (size) {
-    const card = size.closest('product-card');
+    const card = size.closest('product-card, #size-sheet');
     const info = infoFromCard(card.dataset.handle);
     if (!info) return;
     const s = size.dataset.quickSize || size.dataset.size;
@@ -1408,4 +1559,4 @@ document.addEventListener('click', e => {
   if (!store.get('sks-comments-hint', false)) addEventListener('scroll', hint, { once: true, passive: true });
 })();
 
-export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou };
+export { SKS_FMT, SKS_CARD, $, $$, ROOT, BASE, MOTION_OK, FINE_POINTER, urlWritable, memory, store, announce, toast, REEL, rollText, spinText, DOODLES, doodle, CARDS, registerCards, productUrl, yieldToMain, deliveryWindow, trackingOK, openers, openDialog, closeDialog, PHONE_SHEET, sheetStops, snapSheet, popups, lookViewer, FREE_SHIPPING, MOCK_LATENCY, Cart, infoFromCard, renderCart, addWithFeedback, sizeSheet, whenShown, trackEvent, Wish, renderWishState, Recent, loadSlides, initRail, ForYou };

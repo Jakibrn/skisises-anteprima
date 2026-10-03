@@ -384,8 +384,10 @@ if(off||matchMedia('(prefers-reduced-motion: reduce)').matches)c.add('reduce-mot
     </div>
     <script type="application/json" data-collection-json>[{"handle":"patagonia-ws-baggies-short-5-in-57059-mtvi","title":"Costume Baggies Short 5IN Donna Virtually Blue","brand":"Patagonia","price":65,"compareAt":null,"priceVaries":false,"images":["https://cdn.shopify.com/s/files/1/0767/4920/9925/files/1_f41d46a9-626b-44be-ae14-0f8d4a6c2cb5.png?v=1775315895","https://cdn.shopify.com/s/files/1/0767/4920/9925/files/2_5e08a1df-bcd1-4ab1-b5d2-0d15cd652cb1.jpg?v=1775315893","https://cdn.shopify.com/s/files/1/0767/4920/9925/files/3_03a3890b-3ae7-4c5b-a6b3-b9c0c87544ac.jpg?v=1775315893","https://cdn.shopify.com/s/files/1/0767/4920/9925/files/4_b3671d18-70fe-43b2-9117-acf7f040d963.jpg?v=1775315893"],"isNew":false,"bestseller":false,"lowStock":false,"backInStock":false,"archived":false,"sizes":[["XS",false],["S",false],["M",true]],"swatches":[],"rating":null,"hex":"#2F80ED","color":"Azzurro","typeKey":"costume","gender":"donna","audience":"donna","type":"Costume","colorName":"Azzurro","idx":0}]</script>
   </facet-filters>
-  <dialog class="drawer drawer--left facets" id="facets-drawer" aria-labelledby="facets-title">
-    <div class="drawer__head"><h2 class="drawer__title" id="facets-title">Filtri</h2><button type="button" class="icon-button" aria-label="Chiudi i filtri" data-close-dialog><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button></div>
+  <!-- on phones a sheet from the bottom (owner, 03/10): two thirds of the screen, dragged up to the top -->
+  <dialog class="drawer drawer--left drawer--sheet facets" id="facets-drawer" aria-labelledby="facets-title" data-sheet="0.64 0.92">
+    <div class="sheet__handle" aria-hidden="true"></div>
+    <div class="drawer__head" data-sheet-grip><h2 class="drawer__title" id="facets-title">Filtri</h2><button type="button" class="icon-button" aria-label="Chiudi i filtri" data-close-dialog><svg class="icon " aria-hidden="true" focusable="false"><use href="#i-close"/></svg></button></div>
     <div class="drawer__body" data-facets-body data-lenis-prevent></div>
     <div class="drawer__foot facets__foot">
       <button type="button" class="button button--outline" data-clear-filters>Azzera</button>
