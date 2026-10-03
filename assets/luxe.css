@@ -615,10 +615,12 @@ product-card { display: block; position: relative; }
 .rail__progress span { position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(var(--progress, 0.2)); transition: transform var(--d-160) linear; }
 @media (max-width: 767px) { .rail__track { grid-auto-columns: 68%; gap: var(--s4); } .rail__controls .icon-button { display: none; } }
 .full-bleed-rail .rail__track { padding-inline: var(--gutter); margin-inline: calc(-1 * var(--gutter)); }
-/* product rails: 240 / 210 / 185px cards, two per view on phones, round arrows over the photos */
+/* product rails: four cards and a peek of the fifth on laptops and desktops (owner, 03/10: the live 240/210/185px
+   cards were too small on a laptop, six in view), three on tablets, two on phones; round arrows over the photos.
+   The rail is a size container, so the card width (and the arrows' height, half the photo) follows its own width */
+.rail--products { container-type: inline-size; --rail-gap: 24px; --rail-card: calc((100cqw - 3 * var(--rail-gap)) / 4.25); }
 .rail--products .rail__track { grid-auto-columns: var(--rail-card); gap: var(--rail-gap); }
-@media (max-width: 1200px) { .rail--products { --rail-card: 210px; --rail-gap: 22px; } }
-@media (max-width: 900px) { .rail--products { --rail-card: 185px; --rail-gap: 16px; } }
+@media (max-width: 1023px) { .rail--products { --rail-gap: 18px; --rail-card: calc((100cqw - 2 * var(--rail-gap)) / 3.25); } }
 @media (max-width: 600px) { .rail--products .rail__track { grid-auto-columns: calc((100% - 12px) / 2); gap: 12px; } }
 .rail--products .rail__controls { display: contents; }
 .rail--products .rail__progress { display: none; }
@@ -1181,9 +1183,15 @@ html.reduce-motion .roll__s { transition: none; }
 .hero__actions { display: flex; gap: var(--s3); flex-wrap: wrap; }
 @media (max-width: 767px) { .hero { min-height: min(133vw, 88svh); } .hero__media img { object-position: 50% 50%; } }
 
-/* Uomo / Donna split, asymmetric 7/5, the second tile offset down */
+/* Uomo / Donna split, asymmetric 7/5, the second tile offset down. From tablets up the photos take their height from
+   the window, not their width (owner, 03/10: on a laptop the Uomo tile was taller than the screen): the pair and
+   their names fit in one view */
 .split__grid { display: grid; grid-template-columns: 7fr 5fr; gap: clamp(var(--s5), 4vw, var(--s9)); align-items: start; }
-.split__tile--b { margin-top: clamp(48px, 12vw, 200px); }
+.split__tile--b { margin-top: clamp(40px, 9vh, 120px); }
+@media (min-width: 768px) {
+  .split__tile--a .split__media { aspect-ratio: auto; height: clamp(320px, 62vh, 580px); }
+  .split__tile--b .split__media { aspect-ratio: auto; height: clamp(280px, 50vh, 470px); }
+}
 .split__link { display: block; }
 .split__media { display: block; aspect-ratio: 4 / 5; overflow: hidden; background: var(--lichen); }
 .split__media--still { background: var(--lichen); }
@@ -1287,23 +1295,23 @@ html.reduce-motion .roll__s { transition: none; }
 @media (hover: hover) and (pointer: fine) { .logos__item:hover .logos__circle { box-shadow: 0 0 0 1px var(--ink); translate: 0 -2px; } .logos__item:hover .logos__name { color: var(--ink); } }
 @media (max-width: 767px) { .logos__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s5) var(--s3); } }
 
-/* services, asymmetric */
-.services__grid { display: grid; grid-template-columns: 7fr 4fr; grid-template-rows: auto auto; gap: var(--s6) clamp(var(--s5), 4vw, var(--s8)); }
-.service--large { grid-row: span 2; display: grid; gap: var(--s5); align-content: start; }
+/* services: three equal columns (owner, 03/10: the large rental beside two small ones was out of proportion), the
+   live home's illustrations at one ratio; a sideways scroller on phones (below) */
+.services__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6) clamp(var(--s5), 3vw, var(--s7)); }
+.service--large { display: grid; gap: var(--s3); align-content: start; }
 .service { display: grid; gap: var(--s3); align-content: start; }
 .service__eyebrow { font-size: var(--fs-xs); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
 .service .service__eyebrow + h3 { margin-top: calc(-1 * var(--s2)); }
 .service__media { overflow: hidden; background: var(--lichen); }
-.service--large .service__media { aspect-ratio: 16 / 10; }
+.service .service__media { aspect-ratio: 16 / 10; }
 .service__media img { width: 100%; height: 100%; object-fit: cover; }
-.service:not(.service--large) .service__media { aspect-ratio: 16 / 9; }
 .service h3 a { text-decoration: none; }
 .service h3 a::after { content: ""; position: absolute; inset: 0; }
 .service { position: relative; }
 .service .link-arrow { position: relative; z-index: 1; }
 .service__text { display: grid; gap: var(--s3); max-width: 52ch; }
 .services__hours { text-align: right; }
-@media (max-width: 1023px) { .services__grid { grid-template-columns: 1fr; } .service--large { grid-row: auto; } .services__hours { text-align: left; } }
+@media (max-width: 1023px) { .services__hours { text-align: left; } }
 
 /* reviews */
 .reviews__grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s8); align-items: start; border-top: 1px solid var(--line); padding-top: var(--s7); }
